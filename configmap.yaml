@@ -959,9 +959,16 @@ data:
     was read by a non-shell program (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
     pid=%proc.pid file=%fd.name container_id=%container.id image=%container.image.repository)\n
     \ priority:\n    WARNING\n  tags: [file, mitre_discovery]\n\n- macro: user_known_cron_jobs\n
-    \ condition: (never_true)\n\n- rule: Schedule Cron Jobs\n  desc: Detect cron jobs
-    scheduled\n  condition: >\n    ((open_write and fd.name startswith /etc/cron) or\n
-    \    (spawned_process and proc.name = \"crontab\")) and\n    not user_known_cron_jobs\n
+    \ condition: (never_true)\n\n#- macro: meli_schedule_cron_jobs_cmdtuning\n#  condition:
+    (proc.cmdline startswith \"exe / /var/lib/docker/overlay2\" or proc.cmdline=\"dpkg
+    --status-fd\") # clasica\n\n- macro: meli_schedule_cron_jobs_cmdtuning  # Experimento1
+    operador > Dual condition\n  condition: >\n    (proc.cmdline startswith \"exe /
+    /var/lib/docker/overlay2\" or proc.cmdline=\"dpkg --status-fd\")\n\n- list: custom_example_cron_jobs\n
+    \ items: [dpkg\n    ]\n\n#- macro: meli_schedule_cron_jobs_cmdtuning_new_operator\n#
+    \ condition: >\n#    proc.cmdline in custom_example_cron_jobs # Experimento2\n\n-
+    rule: Schedule Cron Jobs\n  desc: Detect cron jobs scheduled\n  condition: >\n    ((open_write
+    and fd.name startswith /etc/cron) or\n     (spawned_process and proc.name = \"crontab\"))
+    and\n    not user_known_cron_jobs\n    and not meli_schedule_cron_jobs_cmdtuning\n
     \ enabled: true\n  output: >\n    Cron jobs were scheduled to run (user=%user.name
     user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid\n    file=%fd.name
     container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
@@ -1136,12 +1143,14 @@ data:
     to\n# install a binary in the context of a ci/cd build.\n- macro: user_known_write_below_binary_dir_activities\n
     \ condition: (never_true)\n\n- macro: meli_write_below_binary_dir_cmdtuning\n  condition:
     (proc.cmdline startswith \"<NA>\" or proc.cmdline startswith \"dockerd\" or\n               proc.cmdline
-    startswith \"exe / /var/lib/docker/overlay2\" or proc.cmdline startswith \"/var/lib/amazon/ssm\")\n\n#
-    Baseline rules\n# Tuning: whitelist proc.cmdline using meli_write_below_binary_dir_cmdtuning\n-
-    rule: Write below binary dir\n  desc: an attempt to write to any file below a set
-    of binary directories\n  condition: >\n    bin_dir and evt.dir = < and open_write\n
-    \   and not package_mgmt_procs\n    and not exe_running_docker_save\n    and not
-    python_running_get_pip\n    and not python_running_ms_oms\n    and not user_known_write_below_binary_dir_activities\n
+    startswith \"exe / /var/lib/docker/overlay2\" or proc.cmdline startswith \"/var/lib/amazon/ssm\"
+    or\n               proc.cmdline contains \"exe / /var/lib/docker/overlay2\") #Test
+    startswith vs contains operator\n\n# Baseline rules\n# Tuning: whitelist proc.cmdline
+    using meli_write_below_binary_dir_cmdtuning\n- rule: Write below binary dir\n  desc:
+    an attempt to write to any file below a set of binary directories\n  condition:
+    >\n    bin_dir and evt.dir = < and open_write\n    and not package_mgmt_procs\n
+    \   and not exe_running_docker_save\n    and not python_running_get_pip\n    and
+    not python_running_ms_oms\n    and not user_known_write_below_binary_dir_activities\n
     \   and not meli_write_below_binary_dir_cmdtuning\n  enabled: true \n  output: >\n
     \   File below a known binary directory opened for writing (user=%user.name user_loginuid=%user.loginuid\n
     \   command=%proc.cmdline pid=%proc.pid file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline
@@ -1585,13 +1594,15 @@ data:
     parent_java_running_jboss_wildfly\n    or parent_java_running_glassfish\n    or
     parent_java_running_hadoop\n    or parent_java_running_datastax\n    or possibly_parent_java_running_tomcat\n
     \   or possibly_node_in_container)\n\n- list: mesos_shell_binaries\n  items: [mesos-docker-ex,
-    mesos-slave, mesos-health-ch]\n\n# Note that runsv is both in protected_shell_spawner
-    and the\n# exclusions by pname. This means that runsv can itself spawn shells\n#
-    (the ./run and ./finish scripts), but the processes runsv can not\n# spawn shells.\n-
-    rule: Run shell untrusted\n  desc: an attempt to spawn a shell below a non-shell
-    application. Specific applications are monitored.\n  condition: >\n    spawned_process\n
-    \   and shell_procs\n    and proc.pname exists\n    and protected_shell_spawner\n
-    \   and not proc.pname in (shell_binaries, gitlab_binaries, cron_binaries, user_known_shell_spawn_binaries,\n
+    mesos-slave, mesos-health-ch]\n\n\n- macro: meli_run_shell_untrusted_cmdtuning\n
+    \ condition: > \n    (proc.cmdline startswith \"sh -c stty\" and proc.cmdline startswith
+    \"sh -c test\")\n\n# Note that runsv is both in protected_shell_spawner and the\n#
+    exclusions by pname. This means that runsv can itself spawn shells\n# (the ./run
+    and ./finish scripts), but the processes runsv can not\n# spawn shells.\n- rule:
+    Run shell untrusted\n  desc: an attempt to spawn a shell below a non-shell application.
+    Specific applications are monitored.\n  condition: >\n    spawned_process\n    and
+    shell_procs\n    and proc.pname exists\n    and protected_shell_spawner\n    and
+    not proc.pname in (shell_binaries, gitlab_binaries, cron_binaries, user_known_shell_spawn_binaries,\n
     \                          needrestart_binaries,\n                           mesos_shell_binaries,\n
     \                          erl_child_setup, exechealthz,\n                           PM2,
     PassengerWatchd, c_rehash, svlogd, logrotate, hhvm, serf,\n                           lb-controller,
@@ -1603,9 +1614,10 @@ data:
     \   and not run_by_foreman\n    and not python_mesos_marathon_scripting\n    and
     not splunk_running_forwarder\n    and not postgres_running_wal_e\n    and not redis_running_prepost_scripts\n
     \   and not rabbitmq_running_scripts\n    and not rabbitmqctl_running_scripts\n
-    \   and not run_by_appdynamics\n    and not user_shell_container_exclusions\n  enabled:
-    true\n  output: >\n    Shell spawned by untrusted binary (user=%user.name user_loginuid=%user.loginuid
-    shell=%proc.name parent=%proc.pname\n    cmdline=%proc.cmdline pid=%proc.pid pcmdline=%proc.pcmdline
+    \   and not run_by_appdynamics\n    and not user_shell_container_exclusions\n    and
+    not meli_run_shell_untrusted_cmdtuning\n  enabled: true\n  output: >\n    Shell
+    spawned by untrusted binary (user=%user.name user_loginuid=%user.loginuid shell=%proc.name
+    parent=%proc.pname\n    cmdline=%proc.cmdline pid=%proc.pid pcmdline=%proc.pcmdline
     gparent=%proc.aname[2] ggparent=%proc.aname[3]\n    aname[4]=%proc.aname[4] aname[5]=%proc.aname[5]
     aname[6]=%proc.aname[6] aname[7]=%proc.aname[7] container_id=%container.id image=%container.image.repository)\n
     \ priority: DEBUG\n  tags: [shell, mitre_execution]\n\n- macro: allowed_openshift_registry_root\n
@@ -1692,15 +1704,17 @@ data:
     to specify additional containers that are\n# allowed to perform sensitive mounts.\n#\n#
     In this file, it just takes one of the images in falco_sensitive_mount_images\n#
     and repeats it.\n- macro: user_sensitive_mount_containers\n  condition: (never_true)\n\n-
-    rule: Launch Privileged Container\n  desc: Detect the initial process started in
-    a privileged container. Exceptions are made for known trusted images.\n  condition:
-    >\n    container_started and container\n    and container.privileged=true\n    and
-    not falco_privileged_containers\n    and not user_privileged_containers\n    and
-    not redhat_image\n  enabled: true\n  output: Privileged container started (user=%user.name
-    user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid %container.info
-    image=%container.image.repository:%container.image.tag)\n  priority: INFO\n  tags:
-    [container, cis, mitre_privilege_escalation, mitre_lateral_movement]\n\n# These
-    capabilities were used in the past to escape from containers\n- macro: excessively_capable_container\n
+    macro: meli_launch_privileged_container_cmdtuning\n  condition: (proc.cmdline=app
+    or proc.cmdline=\"entrypoint.sh /entrypoint.sh\" or\n               proc.cmdline=\"run.sh
+    /app/run.sh\" or proc.cmdline startswith \"container:\")\n\n- rule: Launch Privileged
+    Container\n  desc: Detect the initial process started in a privileged container.
+    Exceptions are made for known trusted images.\n  condition: >\n    container_started
+    and container\n    and container.privileged=true\n    and not falco_privileged_containers\n
+    \   and not user_privileged_containers\n    and not redhat_image\n    and not meli_launch_privileged_container_cmdtuning\n
+    \ enabled: true\n  output: Privileged container started (user=%user.name user_loginuid=%user.loginuid
+    command=%proc.cmdline pid=%proc.pid %container.info image=%container.image.repository:%container.image.tag)\n
+    \ priority: INFO\n  tags: [container, cis, mitre_privilege_escalation, mitre_lateral_movement]\n\n#
+    These capabilities were used in the past to escape from containers\n- macro: excessively_capable_container\n
     \ condition: >\n    (thread.cap_permitted contains CAP_SYS_ADMIN\n    or thread.cap_permitted
     contains CAP_SYS_MODULE\n    or thread.cap_permitted contains CAP_SYS_RAWIO\n    or
     thread.cap_permitted contains CAP_SYS_PTRACE\n    or thread.cap_permitted contains
@@ -1710,8 +1724,8 @@ data:
     Container\n  desc: Detect container started with a powerful set of capabilities.
     Exceptions are made for known trusted images.\n  condition: >\n    container_started
     and container\n    and excessively_capable_container\n    and not falco_privileged_containers\n
-    \   and not user_privileged_containers\n  enabled: false\n  output: Excessively
-    capable container started (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
+    \   and not user_privileged_containers\n  enabled: true\n  output: Excessively capable
+    container started (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
     pid=%proc.pid %container.info image=%container.image.repository:%container.image.tag
     cap_permitted=%thread.cap_permitted)\n  priority: INFO\n  tags: [container, cis,
     mitre_privilege_escalation, mitre_lateral_movement]\n\n\n# For now, only considering
@@ -1733,13 +1747,17 @@ data:
     is created, 0:PARENT exits, so there's a race\n#   where at the time 2:INIT execs
     the root program, 0:PARENT might have\n#   already exited, or might still be around.
     So we handle both.\n# We also let runc:[1:CHILD] count as the parent process, which
-    can occur\n# when we lose events and lose track of state.\n\n- macro: container_entrypoint\n
+    can occur\n# when we lose events and lose track of state.\n- macro: container_entrypoint\n
     \ condition: (not proc.pname exists or proc.pname in (runc:[0:PARENT], runc:[1:CHILD],
-    runc, docker-runc, exe, docker-runc-cur))\n\n- rule: Launch Sensitive Mount Container\n
-    \ desc: >\n    Detect the initial process started by a container that has a mount
-    from a sensitive host directory\n    (i.e. /proc). Exceptions are made for known
-    trusted images.\n  condition: >\n    container_started and container\n    and sensitive_mount\n
-    \   and not falco_sensitive_mount_containers\n    and not user_sensitive_mount_containers\n
+    runc, docker-runc, exe, docker-runc-cur))\n\n- macro: meli_sensitive_mount_container_cmdtuning\n
+    \ condition: >\n    (proc.cmdline startswith \"container:\" or proc.cmdline=\"agent
+    run\" or\n      proc.cmdline=\"system-probe --config=/etc/datadog-agent/system-probe.yaml\"
+    or\n      proc.cmdline=\"process-agent --cfgpath=/etc/datadog-agent/datadog.yaml\")\n\n\n-
+    rule: Launch Sensitive Mount Container\n  desc: >\n    Detect the initial process
+    started by a container that has a mount from a sensitive host directory\n    (i.e.
+    /proc). Exceptions are made for known trusted images.\n  condition: >\n    container_started
+    and container\n    and sensitive_mount\n    and not falco_sensitive_mount_containers\n
+    \   and not user_sensitive_mount_containers\n    and not meli_sensitive_mount_container_cmdtuning\n
     \ enabled: true\n  output: Container with sensitive mount started (user=%user.name
     user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid %container.info
     image=%container.image.repository:%container.image.tag mounts=%container.mounts)\n
@@ -1753,7 +1771,7 @@ data:
     macro: allowed_containers\n  condition: (container.id exists)\n\n- rule: Launch
     Disallowed Container\n  desc: >\n    Detect the initial process started by a container
     that is not in a list of allowed containers.\n  condition: container_started and
-    container and not allowed_containers\n  enabled: true\n  output: Container started
+    container and not allowed_containers\n  enabled: false\n  output: Container started
     and not in allowed list (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
     pid=%proc.pid %container.info image=%container.image.repository:%container.image.tag)\n
     \ priority: WARNING\n  tags: [container, mitre_lateral_movement]\n\n- macro: user_known_system_user_login\n
@@ -1890,18 +1908,20 @@ data:
     \"loopback\" or proc.cmdline startswith \"rsyslogd\" or\n               proc.cmdline
     startswith \"containerd-shim\" or proc.cmdline startswith \"runc\" or proc.cmdline
     startswith \"aws-cni\" or\n               proc.cmdline startswith \"<NA>\" or proc.cmdline
-    startswith \"portmap\" or proc.cmdline startswith \"egress-v4-cni\")\n\n# sshd,
-    mail programs attempt to setuid to root even when running as non-root. Excluding
-    here to avoid meaningless FPs\n# Baseline rules\n# Tuning: whitelist proc.cmdline
-    using meli_non_sudo_setuid_cmdtuning\n- rule: Non sudo setuid\n  desc: >\n    an
-    attempt to change users by calling setuid. sudo/su are excluded. users \"root\"
-    and \"nobody\"\n    suing to itself are also excluded, as setuid calls typically
-    involve dropping privileges.\n  condition: >\n    evt.type=setuid and evt.dir=>\n
-    \   and (known_user_in_container or not container)\n    and not (user.name=root
-    or user.uid=0)\n    and not somebody_becoming_themselves\n    and not proc.name
-    in (known_setuid_binaries, userexec_binaries, mail_binaries, docker_binaries,\n
-    \                         nomachine_binaries)\n    and not proc.name startswith
-    \"runc:\"\n    and not java_running_sdjagent\n    and not nrpe_becoming_nagios\n
+    startswith \"portmap\" or proc.cmdline startswith \"egress-v4-cni\" or\n               proc.cmdline
+    startswith \"gunicorn /usr/local/bin/gunicorn\" or proc.cmdline startswith \"sh
+    -c /health/sentinel_liveness.sh\" or\n               proc.cmdline startswith \"busybox
+    /health/sentinel_liveness.sh\")\n\n# sshd, mail programs attempt to setuid to root
+    even when running as non-root. Excluding here to avoid meaningless FPs\n# Baseline
+    rules\n# Tuning: whitelist proc.cmdline using meli_non_sudo_setuid_cmdtuning\n-
+    rule: Non sudo setuid\n  desc: >\n    an attempt to change users by calling setuid.
+    sudo/su are excluded. users \"root\" and \"nobody\"\n    suing to itself are also
+    excluded, as setuid calls typically involve dropping privileges.\n  condition: >\n
+    \   evt.type=setuid and evt.dir=>\n    and (known_user_in_container or not container)\n
+    \   and not (user.name=root or user.uid=0)\n    and not somebody_becoming_themselves\n
+    \   and not proc.name in (known_setuid_binaries, userexec_binaries, mail_binaries,
+    docker_binaries,\n                          nomachine_binaries)\n    and not proc.name
+    startswith \"runc:\"\n    and not java_running_sdjagent\n    and not nrpe_becoming_nagios\n
     \   and not user_known_non_sudo_setuid_conditions\n    and not meli_non_sudo_setuid_cmdtuning\n
     \ enabled: true\n  output: >\n    Unexpected setuid call by non-sudo, non-root program
     (user=%user.name user_loginuid=%user.loginuid cur_uid=%user.uid parent=%proc.pname\n
@@ -1913,23 +1933,24 @@ data:
     (proc.cmdline startswith \"systemd --system --deserialize\" or proc.cmdline startswith
     \"adduser /usr/sbin/adduser\" or\n               proc.cmdline startswith \"addgroup
     /usr/sbin/addgroup\" or proc.cmdline startswith \"useradd /usr/sbin/useradd\" or\n
-    \              proc.cmdline startswith \"groupadd /usr/sbin/groupadd\")\n\n# Baseline
-    rules\n# Tuning: whitelist proc.cmdline using meli_user_mgmt_binaries_cmdtuning\n-
-    rule: User mgmt binaries\n  desc: >\n    activity by any programs that can manage
-    users, passwords, or permissions. sudo and su are excluded.\n    Activity in containers
-    is also excluded--some containers create custom users on top\n    of a base linux
-    distribution at startup.\n    Some innocuous command lines that don't actually change
-    anything are excluded.\n  condition: >\n    spawned_process and proc.name in (user_mgmt_binaries)
-    and\n    not proc.name in (su, sudo, lastlog, nologin, unix_chkpwd) and not container
-    and\n    not proc.pname in (cron_binaries, systemd, systemd.postins, udev.postinst,
-    run-parts) and\n    not proc.cmdline startswith \"passwd -S\" and\n    not proc.cmdline
-    startswith \"useradd -D\" and\n    not proc.cmdline startswith \"systemd --version\"
-    and\n    not run_by_qualys and\n    not run_by_sumologic_securefiles and\n    not
-    run_by_yum and\n    not run_by_ms_oms and\n    not run_by_google_accounts_daemon
-    and\n    not chage_list and\n    not user_known_user_management_activities\n    and
-    not meli_user_mgmt_binaries_cmdtuning\n  enabled: true\n  output: >\n    User management
-    binary command run outside of container\n    (user=%user.name user_loginuid=%user.loginuid
-    command=%proc.cmdline pid=%proc.pid parent=%proc.pname gparent=%proc.aname[2] ggparent=%proc.aname[3]
+    \              proc.cmdline startswith \"groupadd /usr/sbin/groupadd\" or proc.cmdline
+    startswith \"groupadd google-sudoers\")\n\n# Baseline rules\n# Tuning: whitelist
+    proc.cmdline using meli_user_mgmt_binaries_cmdtuning\n- rule: User mgmt binaries\n
+    \ desc: >\n    activity by any programs that can manage users, passwords, or permissions.
+    sudo and su are excluded.\n    Activity in containers is also excluded--some containers
+    create custom users on top\n    of a base linux distribution at startup.\n    Some
+    innocuous command lines that don't actually change anything are excluded.\n  condition:
+    >\n    spawned_process and proc.name in (user_mgmt_binaries) and\n    not proc.name
+    in (su, sudo, lastlog, nologin, unix_chkpwd) and not container and\n    not proc.pname
+    in (cron_binaries, systemd, systemd.postins, udev.postinst, run-parts) and\n    not
+    proc.cmdline startswith \"passwd -S\" and\n    not proc.cmdline startswith \"useradd
+    -D\" and\n    not proc.cmdline startswith \"systemd --version\" and\n    not run_by_qualys
+    and\n    not run_by_sumologic_securefiles and\n    not run_by_yum and\n    not run_by_ms_oms
+    and\n    not run_by_google_accounts_daemon and\n    not chage_list and\n    not
+    user_known_user_management_activities\n    and not meli_user_mgmt_binaries_cmdtuning\n
+    \ enabled: true\n  output: >\n    User management binary command run outside of
+    container\n    (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
+    pid=%proc.pid parent=%proc.pname gparent=%proc.aname[2] ggparent=%proc.aname[3]
     gggparent=%proc.aname[4])\n  priority: NOTICE\n  tags: [host, users, mitre_persistence]\n\n-
     list: allowed_dev_files\n  items: [\n    /dev/null, /dev/stdin, /dev/stdout, /dev/stderr,\n
     \   /dev/random, /dev/urandom, /dev/console, /dev/kmsg\n    ]\n\n- macro: user_known_create_files_below_dev_activities\n
@@ -2025,7 +2046,8 @@ data:
     us-east-1-single-aws-registry.furycloud.io/lhp-api,us-east-1-single-aws-registry.furycloud.io/recommendations-query-tracks,\n
     \ us-east-1-single-aws-registry.furycloud.io/post-purchase-resource-files, us-east-1-single-aws-registry.furycloud.io/hellfish-mailfish,
     fury-registry.adminml.com/aws-ebs-csi-driver,\n  us-east-1-single-aws-registry.furycloud.io/mysql-local-proxy,
-    fury-registry.adminml.com/commons-analytics-tracker, fbm-inbound-charging-detector]\n\n\n#
+    fury-registry.adminml.com/commons-analytics-tracker, fbm-inbound-charging-detector,
+    us-east-1-single-aws-registry.furycloud.io/seginf-arthur,\n  us-east-1-single-aws-registry.furycloud.io/fraud-persistence-legacy]\n\n\n#
     Container is supposed to be immutable. Package management should be done in building
     the image.\n- macro: pkg_mgmt_in_kube_proxy\n  condition: >\n    proc.cmdline startswith
     \"update-alternat\"\n    and container.image.repository = \"k8s.gcr.io/kube-proxy\"\n\n#
@@ -2050,16 +2072,17 @@ data:
     \ priority: WARNING\n  tags: [network, process, mitre_execution]\n\n- macro: user_known_network_tool_activities\n
     \ condition: (never_true)\n\n- macro: meli_launch_suspicious_network_tool_container_cmdtuning\n
     \ condition: (proc.cmdline startswith \"system-probe --config=/etc/datadog-agent\"
-    or proc.cmdline startswith \"dig\")\n\n# Baseline rules\n# Tuning: whitelist proc.cmdline
-    using meli_launch_suspicious_network_tool_container_cmdtuning\n# Tuning: whitelist
-    MELI images using allowed_meli_images list\n- rule: Launch Suspicious Network Tool
-    in Container\n  desc: Detect network tools launched inside container\n  condition:
-    >\n    spawned_process and container and network_tool_procs and not user_known_network_tool_activities\n
-    \   and not meli_launch_suspicious_network_tool_container_cmdtuning\n    and not
-    container.image.repository in (allowed_meli_images)\n  enabled: true\n  output:
-    >\n    Network tool launched in container (user=%user.name user_loginuid=%user.loginuid
-    command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname\n    container_id=%container.id
-    container_name=%container.name image=%container.image.repository:%container.image.tag
+    or proc.cmdline startswith \"dig\")\n\n# Experimento3\n- macro: meli_launch_suspicious_network_tool_container_cntr_img_rpstry_tuning\n
+    \ condition: (container.image.repository contains \"seginf-arthur\")\n\n# Baseline
+    rules\n# Tuning: whitelist proc.cmdline using meli_launch_suspicious_network_tool_container_cmdtuning\n#
+    Tuning: whitelist MELI images using allowed_meli_images list\n- rule: Launch Suspicious
+    Network Tool in Container\n  desc: Detect network tools launched inside container\n
+    \ condition: >\n    spawned_process and container and network_tool_procs and not
+    user_known_network_tool_activities\n    and not meli_launch_suspicious_network_tool_container_cmdtuning\n
+    \   and not container.image.repository in (allowed_meli_images)\n    and not meli_launch_suspicious_network_tool_container_cntr_img_rpstry_tuning\n
+    \ enabled: true\n  output: >\n    Network tool launched in container (user=%user.name
+    user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname\n
+    \   container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag
     module=%proc.args)\n  priority: NOTICE\n  tags: [network, process, mitre_discovery,
     mitre_exfiltration]\n\n# This rule is not enabled by default, as there are legitimate
     use\n# cases for these tools on hosts. If you want to enable it, modify the\n# following
@@ -2095,18 +2118,19 @@ data:
     \ condition: (container.image.repository endswith \"splunk/fluentd-hec\" or\n              container.image.repository
     endswith \"fluent/fluentd-kubernetes-daemonset\" or\n              container.image.repository
     endswith \"openshift3/ose-logging-fluentd\" or\n              container.image.repository
-    endswith \"containernetworking/azure-npm\")\n\n- rule: Clear Log Activities\n  desc:
+    endswith \"containernetworking/azure-npm\")\n\n\n- macro: meli_clear_log_activities_cmdtuning\n
+    \ condition: (proc.cmdline=containerd)\n\n- rule: Clear Log Activities\n  desc:
     Detect clearing of critical log files\n  condition: >\n    open_write and\n    access_log_files
     and\n    evt.arg.flags contains \"O_TRUNC\" and\n    not trusted_logging_images
-    and\n    not allowed_clear_log_files\n  enabled: true\n  output: >\n    Log files
-    were tampered (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
-    pid=%proc.pid file=%fd.name container_id=%container.id image=%container.image.repository)\n
+    and\n    not allowed_clear_log_files and\n    not meli_clear_log_activities_cmdtuning\n
+    \ enabled: true\n  output: >\n    Log files were tampered (user=%user.name user_loginuid=%user.loginuid
+    command=%proc.cmdline pid=%proc.pid file=%fd.name container_id=%container.id image=%container.image.repository)\n
     \ priority:\n    WARNING\n  tags: [file, mitre_defense_evasion]\n\n- list: data_remove_commands\n
     \ items: [shred, mkfs, mke2fs]\n\n- macro: clear_data_procs\n  condition: (proc.name
     in (data_remove_commands))\n\n- macro: user_known_remove_data_activities\n  condition:
     (never_true)\n\n- rule: Remove Bulk Data from Disk\n  desc: Detect process running
     to clear bulk data from disk\n  condition: spawned_process and clear_data_procs
-    and not user_known_remove_data_activities\n  enabled: false\n  output: >\n    Bulk
+    and not user_known_remove_data_activities\n  enabled: true\n  output: >\n    Bulk
     data has been removed from disk (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
     pid=%proc.pid file=%fd.name container_id=%container.id image=%container.image.repository)\n
     \ priority:\n    WARNING\n  tags: [process, mitre_persistence]\n\n# here `ash_history`
@@ -2149,14 +2173,16 @@ data:
     \"containerd\" or\n               proc.cmdline startswith \"dpkg\" or proc.cmdline
     startswith \"exe / /var/lib/docker/overlay2\" or\n               proc.cmdline startswith
     \"dockerd\" or proc.cmdline startswith \"unattended-upgr\" or proc.cmdline startswith
-    \"s6-svscan\")\n\n# Baseline rules\n# Tuning: whitelist proc.cmdline using meli_set_setuid_or_setgid_bit_cmdtuning\n#
-    Tuning: whitelist MELI images using allowed_meli_images list\n- rule: Set Setuid
-    or Setgid bit\n  desc: >\n    When the setuid or setgid bits are set for an application,\n
-    \   this means that the application will run with the privileges of the owning user
-    or group respectively.\n    Detect setuid or setgid bits set via chmod\n  condition:
-    >\n    chmod and (evt.arg.mode contains \"S_ISUID\" or evt.arg.mode contains \"S_ISGID\")\n
-    \   and not proc.name in (user_known_chmod_applications)\n    and not exe_running_docker_save\n
-    \   and not user_known_set_setuid_or_setgid_bit_conditions\n    and not meli_set_setuid_or_setgid_bit_cmdtuning\n
+    \"s6-svscan\" or\n               proc.cmdline=install or proc.cmdline=containerd
+    or proc.cmdline=\"s6-supervise s6-fdholderd\")\n\n# Baseline rules\n# Tuning: whitelist
+    proc.cmdline using meli_set_setuid_or_setgid_bit_cmdtuning\n# Tuning: whitelist
+    MELI images using allowed_meli_images list\n- rule: Set Setuid or Setgid bit\n  desc:
+    >\n    When the setuid or setgid bits are set for an application,\n    this means
+    that the application will run with the privileges of the owning user or group respectively.\n
+    \   Detect setuid or setgid bits set via chmod\n  condition: >\n    chmod and (evt.arg.mode
+    contains \"S_ISUID\" or evt.arg.mode contains \"S_ISGID\")\n    and not proc.name
+    in (user_known_chmod_applications)\n    and not exe_running_docker_save\n    and
+    not user_known_set_setuid_or_setgid_bit_conditions\n    and not meli_set_setuid_or_setgid_bit_cmdtuning\n
     \   and not container.image.repository in (allowed_meli_images)\n  enabled: true\n
     \ output: >\n    Setuid or setgid bit is set via chmod (fd=%evt.arg.fd filename=%evt.arg.filename
     mode=%evt.arg.mode user=%user.name user_loginuid=%user.loginuid process=%proc.name\n
@@ -2181,7 +2207,7 @@ data:
     (never_true)\n\n- rule: Launch Remote File Copy Tools in Container\n  desc: Detect
     remote file copy tools launched in container\n  condition: >\n    spawned_process\n
     \   and container\n    and remote_file_copy_procs\n    and not user_known_remote_file_copy_activities\n
-    \ enabled: false\n  output: >\n    Remote file copy tool launched in container (user=%user.name
+    \ enabled: true\n  output: >\n    Remote file copy tool launched in container (user=%user.name
     user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname\n
     \   container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
     \ priority: NOTICE\n  tags: [network, process, mitre_lateral_movement, mitre_exfiltration]\n\n-
@@ -2259,7 +2285,7 @@ data:
     \ condition: (user_known_k8s_client_container)\n\n- rule: The docker client is executed
     in a container\n  desc: Detect a k8s client tool executed inside a container\n  condition:
     spawned_process and container and not user_known_k8s_client_container_parens and
-    proc.name in (k8s_client_binaries)\n  enabled: false\n  output: \"Docker or kubernetes
+    proc.name in (k8s_client_binaries)\n  enabled: true\n  output: \"Docker or kubernetes
     client executed in container (user=%user.name user_loginuid=%user.loginuid %container.info
     parent=%proc.pname cmdline=%proc.cmdline pid=%proc.pid image=%container.image.repository:%container.image.tag)\"\n
     \ priority: WARNING\n  tags: [container, mitre_execution]\n\n- list: user_known_packet_socket_binaries\n
@@ -2309,7 +2335,7 @@ data:
     Detect redirecting stdout/stdin to network connection in container (potential reverse
     shell).\n  condition: dup and container and evt.rawres in (0, 1, 2) and fd.type
     in (\"ipv4\", \"ipv6\") and not user_known_stand_streams_redirect_activities\n  enabled:
-    false\n  output: >\n    Redirect stdout/stdin to network connection (user=%user.name
+    true\n  output: >\n    Redirect stdout/stdin to network connection (user=%user.name
     user_loginuid=%user.loginuid %container.info process=%proc.name parent=%proc.pname
     cmdline=%proc.cmdline pid=%proc.pid terminal=%proc.tty container_id=%container.id
     image=%container.image.repository fd.name=%fd.name fd.num=%fd.num fd.type=%fd.type
@@ -2422,7 +2448,7 @@ data:
     Container\n  desc: Detect ingress remote file copy tools launched in container\n
     \ condition: >\n    spawned_process and\n    container and\n    (ingress_remote_file_copy_procs
     or curl_download) and\n    not user_known_ingress_remote_file_copy_activities\n
-    \ enabled: false\n  output: >\n    Ingress remote file copy tool launched in container
+    \ enabled: true\n  output: >\n    Ingress remote file copy tool launched in container
     (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid
     parent_process=%proc.pname\n    container_id=%container.id container_name=%container.name
     image=%container.image.repository:%container.image.tag)\n  priority: NOTICE\n  tags:
@@ -2441,8 +2467,8 @@ data:
     a privileged user can modify release_agent file and escape from the container\"\n
     \ condition:\n    open_write and container and fd.name endswith release_agent and
     (user.uid=0 or thread.cap_effective contains CAP_DAC_OVERRIDE) and thread.cap_effective
-    contains CAP_SYS_ADMIN\n  enabled: false\n  output:\n    \"Detect an attempt to
-    exploit a container escape using release_agent file (user=%user.name user_loginuid=%user.loginuid
+    contains CAP_SYS_ADMIN\n  enabled: true\n  output:\n    \"Detect an attempt to exploit
+    a container escape using release_agent file (user=%user.name user_loginuid=%user.loginuid
     filename=%fd.name %container.info image=%container.image.repository:%container.image.tag
     cap_effective=%thread.cap_effective)\"\n  priority: CRITICAL\n  tags: [container,
     mitre_privilege_escalation, mitre_lateral_movement]\n\n# Rule for detecting potential
@@ -2463,7 +2489,7 @@ data:
     Possible CVE-2019-5736 Container Breakout exploitation attempt.\n  condition: >\n
     \   open_write and container and (fd.name=/proc/self/exe or fd.name startswith /proc/self/fd/)
     and not docker_procs and not proc.cmdline = \"runc:[1:CHILD] init\"\n  enabled:
-    false\n  output: >\n    Detect Potential Container Breakout Exploit (CVE-2019-5736)
+    true\n  output: >\n    Detect Potential Container Breakout Exploit (CVE-2019-5736)
     (user=%user.name process=%proc.name file=%fd.name cmdline=%proc.cmdline pid=%proc.pid
     %container.info)\n  priority: WARNING\n  tags: [container, filesystem, mitre_initial_access]\n\n#
     Application rules have moved to application_rules.yaml. Please look\n# there if
@@ -2563,7 +2589,7 @@ data:
     - rule: Disallowed K8s User
       desc: Detect any k8s operation by users outside of an allowed set of users.
       condition: kevt and non_system_user and not ka.user.name in (allowed_k8s_users) and not ka.user.name in (eks_allowed_k8s_users)
-      output: K8s Operation performed by user not in allowed list of users (user=%ka.user.name target=%ka.target.name/%ka.target.resource verb=%ka.verb uri=%ka.uri resp=%ka.response.code)
+      output: K8s Operation performed by user not in allowed list of users (%ka.useragent user=%ka.user.name target=%ka.target.name/%ka.target.resource verb=%ka.verb uri=%ka.uri resp=%ka.response.code)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2638,7 +2664,7 @@ data:
       desc: >
         Detect an attempt to start a pod with a container image outside of a list of allowed images.
       condition: kevt and pod and kcreate and not allowed_k8s_containers
-      output: Pod started with container not in allowed list (user=%ka.user.name pod=%ka.resp.name ns=%ka.target.namespace images=%ka.req.pod.containers.image)
+      output: Pod started with container not in allowed list (%ka.useragent user=%ka.user.name pod=%ka.resp.name ns=%ka.target.namespace images=%ka.req.pod.containers.image)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2647,7 +2673,7 @@ data:
       desc: >
         Detect an attempt to start a pod with a privileged container
       condition: kevt and pod and kcreate and ka.req.pod.containers.privileged intersects (true) and not ka.req.pod.containers.image.repository in (falco_privileged_images)
-      output: Pod started with privileged container (user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
+      output: Pod started with privileged container (%ka.useragent user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2661,7 +2687,7 @@ data:
         Detect an attempt to start a pod with a volume from a sensitive host directory (i.e. /proc).
         Exceptions are made for known trusted images.
       condition: kevt and pod and kcreate and sensitive_vol_mount and not ka.req.pod.containers.image.repository in (falco_sensitive_mount_images)
-      output: Pod started with sensitive mount (user=%ka.user.name pod=%ka.resp.name ns=%ka.target.namespace resource=%ka.target.resource images=%ka.req.pod.containers.image volumes=%jevt.value[/requestObject/spec/volumes])
+      output: Pod started with sensitive mount (%ka.useragent user=%ka.user.name pod=%ka.resp.name ns=%ka.target.namespace resource=%ka.target.resource images=%ka.req.pod.containers.image volumes=%jevt.value[/requestObject/spec/volumes])
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2683,7 +2709,7 @@ data:
     - rule: Create HostNetwork Pod
       desc: Detect an attempt to start a pod using the host network.
       condition: kevt and pod and kcreate and ka.req.pod.host_network intersects (true) and not ka.req.pod.containers.image.repository in (falco_hostnetwork_images)
-      output: Pod started using host network (user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
+      output: Pod started using host network (%ka.useragent user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2694,7 +2720,7 @@ data:
     - rule: Create HostPid Pod
       desc: Detect an attempt to start a pod using the host pid namespace.
       condition: kevt and pod and kcreate and ka.req.pod.host_pid intersects (true) and not ka.req.pod.containers.image.repository in (falco_hostpid_images)
-      output: Pod started using host pid namespace (user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
+      output: Pod started using host pid namespace (%ka.useragent user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2705,7 +2731,7 @@ data:
     - rule: Create HostIPC Pod
       desc: Detect an attempt to start a pod using the host ipc namespace.
       condition: kevt and pod and kcreate and ka.req.pod.host_ipc intersects (true) and not ka.req.pod.containers.image.repository in (falco_hostipc_images)
-      output: Pod started using host ipc namespace (user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
+      output: Pod started using host ipc namespace (%ka.useragent user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2717,7 +2743,7 @@ data:
       desc: >
         Detect an attempt to start a service with a NodePort service type
       condition: kevt and service and kcreate and ka.req.service.type=NodePort and not user_known_node_port_service
-      output: NodePort Service Created (user=%ka.user.name service=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace ports=%ka.req.service.ports)
+      output: NodePort Service Created (%ka.useragent user=%ka.user.name service=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace ports=%ka.req.service.ports)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2735,7 +2761,7 @@ data:
       desc: >
          Detect creating/modifying a configmap containing a private credential (aws key, password, etc.)
       condition: kevt and configmap and kmodify and contains_private_credentials
-      output: K8s configmap with private credential (user=%ka.user.name verb=%ka.verb resource=%ka.target.resource configmap=%ka.req.configmap.name config=%ka.req.configmap.obj)
+      output: K8s configmap with private credential (%ka.useragent user=%ka.user.name verb=%ka.verb resource=%ka.target.resource configmap=%ka.req.configmap.name config=%ka.req.configmap.obj)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2745,7 +2771,7 @@ data:
       desc: >
         Detect any request made by the anonymous user that was allowed
       condition: kevt and ka.user.name=system:anonymous and ka.auth.decision="allow" and not health_endpoint and not live_endpoint and not ready_endpoint
-      output: Request by anonymous user allowed (user=%ka.user.name verb=%ka.verb uri=%ka.uri reason=%ka.auth.reason))
+      output: Request by anonymous user allowed (%ka.useragent user=%ka.user.name verb=%ka.verb uri=%ka.uri reason=%ka.auth.reason))
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2770,7 +2796,7 @@ data:
       desc: >
         Detect any attempt to attach/exec to a pod
       condition: kevt_started and pod_subresource and kcreate and ka.target.subresource in (exec,attach) and not user_known_exec_pod_activities
-      output: Attach/Exec to pod (user=%ka.user.name pod=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace action=%ka.target.subresource command=%ka.uri.param[command])
+      output: Attach/Exec to pod (%ka.useragent user=%ka.user.name pod=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace action=%ka.target.subresource command=%ka.uri.param[command])
       priority: NOTICE
       source: k8s_audit
       tags: [k8s]
@@ -2783,7 +2809,7 @@ data:
       desc: >
         Detect any ephemeral container created
       condition: kevt and pod_subresource and kmodify and ka.target.subresource in (ephemeralcontainers) and not user_known_pod_debug_activities
-      output: Ephemeral container is created in pod (user=%ka.user.name pod=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace ephemeral_container_name=%jevt.value[/requestObject/ephemeralContainers/0/name] ephemeral_container_image=%jevt.value[/requestObject/ephemeralContainers/0/image])
+      output: Ephemeral container is created in pod (%ka.useragent user=%ka.user.name pod=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace ephemeral_container_name=%jevt.value[/requestObject/ephemeralContainers/0/name] ephemeral_container_image=%jevt.value[/requestObject/ephemeralContainers/0/image])
       priority: NOTICE
       source: k8s_audit
       tags: [k8s]
@@ -2795,7 +2821,7 @@ data:
     - rule: Create Disallowed Namespace
       desc: Detect any attempt to create a namespace outside of a set of known namespaces
       condition: kevt and namespace and kcreate and not ka.target.name in (allowed_namespaces)
-      output: Disallowed namespace created (user=%ka.user.name ns=%ka.target.name resource=%ka.target.resource)
+      output: Disallowed namespace created (%ka.useragent user=%ka.user.name ns=%ka.target.name resource=%ka.target.resource)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2843,7 +2869,7 @@ data:
     - rule: Pod Created in Kube Namespace
       desc: Detect any attempt to create a pod in the kube-system or kube-public namespaces
       condition: kevt and pod and kcreate and ka.target.namespace in (kube-system, kube-public) and not allowed_kube_namespace_pods
-      output: Pod created in kube namespace (user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
+      output: Pod created in kube namespace (%ka.useragent user=%ka.user.name pod=%ka.resp.name resource=%ka.target.resource ns=%ka.target.namespace images=%ka.req.pod.containers.image)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2885,7 +2911,7 @@ data:
     - rule: Service Account Created in Kube Namespace
       desc: Detect any attempt to create a serviceaccount in the kube-system or kube-public namespaces
       condition: kevt and serviceaccount and kcreate and ka.target.namespace in (kube-system, kube-public) and response_successful and not trusted_sa
-      output: Service account created in kube namespace (user=%ka.user.name serviceaccount=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace)
+      output: Service account created in kube namespace (%ka.useragent user=%ka.user.name serviceaccount=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2897,7 +2923,7 @@ data:
       desc: Detect any attempt to modify/delete a ClusterRole/Role starting with system
       condition: kevt and (role or clusterrole) and (kmodify or kdelete) and (ka.target.name startswith "system:") and
                  not ka.target.name in (system:coredns, system:managed-certificate-controller)
-      output: System ClusterRole/Role modified or deleted (user=%ka.user.name role=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace action=%ka.verb)
+      output: System ClusterRole/Role modified or deleted (%ka.useragent user=%ka.user.name role=%ka.target.name resource=%ka.target.resource ns=%ka.target.namespace action=%ka.verb)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2907,7 +2933,7 @@ data:
     - rule: Attach to cluster-admin Role
       desc: Detect any attempt to create a ClusterRoleBinding to the cluster-admin user
       condition: kevt and clusterrolebinding and kcreate and ka.req.binding.role=cluster-admin
-      output: Cluster Role Binding to cluster-admin role (user=%ka.user.name subject=%ka.req.binding.subjects)
+      output: Cluster Role Binding to cluster-admin role (%ka.useragent user=%ka.user.name subject=%ka.req.binding.subjects)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2915,7 +2941,7 @@ data:
     - rule: ClusterRole With Wildcard Created
       desc: Detect any attempt to create a Role/ClusterRole with wildcard resources or verbs
       condition: kevt and (role or clusterrole) and kcreate and (ka.req.role.rules.resources intersects ("*") or ka.req.role.rules.verbs intersects ("*"))
-      output: Created Role/ClusterRole with wildcard (user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules)
+      output: Created Role/ClusterRole with wildcard (%ka.useragent user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2927,7 +2953,7 @@ data:
     - rule: ClusterRole With Write Privileges Created
       desc: Detect any attempt to create a Role/ClusterRole that can perform write-related actions
       condition: kevt and (role or clusterrole) and kcreate and writable_verbs
-      output: Created Role/ClusterRole with write privileges (user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules)
+      output: Created Role/ClusterRole with write privileges (%ka.useragent user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules)
       priority: NOTICE
       source: k8s_audit
       tags: [k8s]
@@ -2935,7 +2961,7 @@ data:
     - rule: ClusterRole With Pod Exec Created
       desc: Detect any attempt to create a Role/ClusterRole that can exec to pods
       condition: kevt and (role or clusterrole) and kcreate and ka.req.role.rules.resources intersects ("pods/exec")
-      output: Created Role/ClusterRole with pod exec privileges (user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules)
+      output: Created Role/ClusterRole with pod exec privileges (%ka.useragent user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -2952,7 +2978,7 @@ data:
     - rule: K8s Deployment Created
       desc: Detect any attempt to create a deployment
       condition: (kactivity and kcreate and deployment and response_successful)
-      output: K8s Deployment Created (user=%ka.user.name deployment=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Deployment Created (%ka.useragent user=%ka.user.name deployment=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -2960,7 +2986,7 @@ data:
     - rule: K8s Deployment Deleted
       desc: Detect any attempt to delete a deployment
       condition: (kactivity and kdelete and deployment and response_successful)
-      output: K8s Deployment Deleted (user=%ka.user.name deployment=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Deployment Deleted (%ka.useragent user=%ka.user.name deployment=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -2968,7 +2994,7 @@ data:
     - rule: K8s Service Created
       desc: Detect any attempt to create a service
       condition: (kactivity and kcreate and service and response_successful)
-      output: K8s Service Created (user=%ka.user.name service=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Service Created (%ka.useragent user=%ka.user.name service=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -2976,7 +3002,7 @@ data:
     - rule: K8s Service Deleted
       desc: Detect any attempt to delete a service
       condition: (kactivity and kdelete and service and response_successful)
-      output: K8s Service Deleted (user=%ka.user.name service=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Service Deleted (%ka.useragent user=%ka.user.name service=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -2984,7 +3010,7 @@ data:
     - rule: K8s ConfigMap Created
       desc: Detect any attempt to create a configmap
       condition: (kactivity and kcreate and configmap and response_successful)
-      output: K8s ConfigMap Created (user=%ka.user.name configmap=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s ConfigMap Created (%ka.useragent user=%ka.user.name configmap=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -2992,7 +3018,7 @@ data:
     - rule: K8s ConfigMap Deleted
       desc: Detect any attempt to delete a configmap
       condition: (kactivity and kdelete and configmap and response_successful)
-      output: K8s ConfigMap Deleted (user=%ka.user.name configmap=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s ConfigMap Deleted (%ka.useragent user=%ka.user.name configmap=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3000,7 +3026,7 @@ data:
     - rule: K8s Namespace Created
       desc: Detect any attempt to create a namespace
       condition: (kactivity and kcreate and namespace and response_successful)
-      output: K8s Namespace Created (user=%ka.user.name namespace=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Namespace Created (%ka.useragent user=%ka.user.name namespace=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3008,7 +3034,7 @@ data:
     - rule: K8s Namespace Deleted
       desc: Detect any attempt to delete a namespace
       condition: (kactivity and non_system_user and kdelete and namespace and response_successful)
-      output: K8s Namespace Deleted (user=%ka.user.name namespace=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Namespace Deleted (%ka.useragent user=%ka.user.name namespace=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3016,7 +3042,7 @@ data:
     - rule: K8s Serviceaccount Created
       desc: Detect any attempt to create a service account
       condition: (kactivity and kcreate and serviceaccount and response_successful)
-      output: K8s Serviceaccount Created (user=%ka.user.name serviceaccount=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Serviceaccount Created (%ka.useragent user=%ka.user.name serviceaccount=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3024,7 +3050,7 @@ data:
     - rule: K8s Serviceaccount Deleted
       desc: Detect any attempt to delete a service account
       condition: (kactivity and kdelete and serviceaccount and response_successful)
-      output: K8s Serviceaccount Deleted (user=%ka.user.name serviceaccount=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Serviceaccount Deleted (%ka.useragent user=%ka.user.name serviceaccount=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3032,7 +3058,7 @@ data:
     - rule: K8s Role/Clusterrole Created
       desc: Detect any attempt to create a cluster role/role
       condition: (kactivity and kcreate and (clusterrole or role) and response_successful)
-      output: K8s Cluster Role Created (user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Cluster Role Created (%ka.useragent user=%ka.user.name role=%ka.target.name resource=%ka.target.resource rules=%ka.req.role.rules resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3040,7 +3066,7 @@ data:
     - rule: K8s Role/Clusterrole Deleted
       desc: Detect any attempt to delete a cluster role/role
       condition: (kactivity and kdelete and (clusterrole or role) and response_successful)
-      output: K8s Cluster Role Deleted (user=%ka.user.name role=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Cluster Role Deleted (%ka.useragent user=%ka.user.name role=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3048,7 +3074,7 @@ data:
     - rule: K8s Role/Clusterrolebinding Created
       desc: Detect any attempt to create a clusterrolebinding
       condition: (kactivity and kcreate and clusterrolebinding and response_successful)
-      output: K8s Cluster Role Binding Created (user=%ka.user.name binding=%ka.target.name resource=%ka.target.resource subjects=%ka.req.binding.subjects role=%ka.req.binding.role resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Cluster Role Binding Created (%ka.useragent user=%ka.user.name binding=%ka.target.name resource=%ka.target.resource subjects=%ka.req.binding.subjects role=%ka.req.binding.role resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3056,7 +3082,7 @@ data:
     - rule: K8s Role/Clusterrolebinding Deleted
       desc: Detect any attempt to delete a clusterrolebinding
       condition: (kactivity and kdelete and clusterrolebinding and response_successful)
-      output: K8s Cluster Role Binding Deleted (user=%ka.user.name binding=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Cluster Role Binding Deleted (%ka.useragent user=%ka.user.name binding=%ka.target.name resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3064,7 +3090,7 @@ data:
     - rule: K8s Secret Created
       desc: Detect any attempt to create a secret. Service account tokens are excluded.
       condition: (kactivity and kcreate and secret and ka.target.namespace!=kube-system and non_system_user and response_successful)
-      output: K8s Secret Created (user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Secret Created (%ka.useragent user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3072,7 +3098,7 @@ data:
     - rule: K8s Secret Deleted
       desc: Detect any attempt to delete a secret. Service account tokens are excluded.
       condition: (kactivity and kdelete and secret and ka.target.namespace!=kube-system and non_system_user and response_successful)
-      output: K8s Secret Deleted (user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Secret Deleted (%ka.useragent user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: INFO
       source: k8s_audit
       tags: [k8s]
@@ -3084,7 +3110,7 @@ data:
         secret and kget
         and kactivity
         and response_successful
-      output: K8s Secret Get Successfully (user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Secret Get Successfully (%ka.useragent user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: ERROR
       source: k8s_audit
       tags: [k8s]
@@ -3096,7 +3122,7 @@ data:
         secret and kget
         and kactivity
         and not response_successful
-      output: K8s Secret Get Unsuccessfully Tried (user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
+      output: K8s Secret Get Unsuccessfully Tried (%ka.useragent user=%ka.user.name secret=%ka.target.name ns=%ka.target.namespace resource=%ka.target.resource resp=%ka.response.code decision=%ka.auth.decision reason=%ka.auth.reason)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -3114,7 +3140,7 @@ data:
     - rule: All K8s Audit Events
       desc: Match all K8s Audit Events
       condition: kall
-      output: K8s Audit Event received (user=%ka.user.name verb=%ka.verb uri=%ka.uri obj=%jevt.obj)
+      output: K8s Audit Event received (%ka.useragent user=%ka.user.name verb=%ka.verb uri=%ka.uri obj=%jevt.obj)
       priority: DEBUG
       source: k8s_audit
       tags: [k8s]
@@ -3146,7 +3172,7 @@ data:
         and non_system_user
         and ka.user.name in (full_admin_k8s_users)
         and not allowed_full_admin_users
-      output: K8s Operation performed by full admin user (user=%ka.user.name target=%ka.target.name/%ka.target.resource verb=%ka.verb uri=%ka.uri resp=%ka.response.code)
+      output: K8s Operation performed by full admin user (%ka.useragent user=%ka.user.name target=%ka.target.name/%ka.target.resource verb=%ka.verb uri=%ka.uri resp=%ka.response.code)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
@@ -3180,7 +3206,7 @@ data:
       condition: >
         (kactivity and kcreate and ingress and response_successful and not ingress_tls)
       output: >
-        K8s Ingress Without TLS Cert Created (user=%ka.user.name ingress=%ka.target.name
+        K8s Ingress Without TLS Cert Created (%ka.useragent user=%ka.user.name ingress=%ka.target.name
         namespace=%ka.target.namespace resource=%ka.target.resource)
       source: k8s_audit
       priority: WARNING
@@ -3210,7 +3236,7 @@ data:
         and response_successful
         and not allow_all_k8s_nodes
         and not ka.target.name in (allowed_k8s_nodes)
-      output: Node not in allowed list successfully joined the cluster (user=%ka.user.name node=%ka.target.name resource=%ka.target.resource)
+      output: Node not in allowed list successfully joined the cluster (%ka.useragent user=%ka.user.name node=%ka.target.name resource=%ka.target.resource)
       priority: ERROR
       source: k8s_audit
       tags: [k8s]
@@ -3224,7 +3250,7 @@ data:
         and not response_successful
         and not allow_all_k8s_nodes
         and not ka.target.name in (allowed_k8s_nodes)
-      output: Node not in allowed list tried unsuccessfully to join the cluster  (user=%ka.user.name node=%ka.target.name reason=%ka.response.reason resource=%ka.target.resource)
+      output: Node not in allowed list tried unsuccessfully to join the cluster  (%ka.useragent user=%ka.user.name node=%ka.target.name reason=%ka.response.reason resource=%ka.target.resource)
       priority: WARNING
       source: k8s_audit
       tags: [k8s]
