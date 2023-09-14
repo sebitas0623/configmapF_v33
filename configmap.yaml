@@ -2123,9 +2123,9 @@ data:
     user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname\n
     \   container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag
     module=%proc.args Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [network,
-    process, mitre_discovery, mitre_exfiltration, IRT_Alert, tagTest]\n\n# This rule
-    is not enabled by default, as there are legitimate use\n# cases for these tools
-    on hosts. If you want to enable it, modify the\n# following macro.\n- macro: consider_network_tools_on_host\n
+    process, mitre_discovery, mitre_exfiltration, IRT_Alert]\n\n# This rule is not enabled
+    by default, as there are legitimate use\n# cases for these tools on hosts. If you
+    want to enable it, modify the\n# following macro.\n- macro: consider_network_tools_on_host\n
     \ condition: (always_true)\n\n# Baseline rules\n- rule: Launch Suspicious Network
     Tool on Host\n  desc: Detect network tools launched on the host\n  condition: >\n
     \   spawned_process and\n    not container and\n    consider_network_tools_on_host
