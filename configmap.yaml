@@ -711,37 +711,78 @@ data:
         - aws_cloudtrail
       source: aws_cloudtrail
   
-  falco_rules.local.yaml: |
-    #
-    # Copyright (C) 2019 The Falco Authors.
-    #
-    #
-    # Licensed under the Apache License, Version 2.0 (the "License");
-    # you may not use this file except in compliance with the License.
-    # You may obtain a copy of the License at
-    #
-    #     http://www.apache.org/licenses/LICENSE-2.0
-    #
-    # Unless required by applicable law or agreed to in writing, software
-    # distributed under the License is distributed on an "AS IS" BASIS,
-    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    # See the License for the specific language governing permissions and
-    # limitations under the License.
-    #
-  
-    ####################
-    # Your custom rules!
-    ####################
-  
-    # Add new rules, like this one
-    # - rule: The program "sudo" is run in a container
-    #   desc: An event will trigger every time you run sudo in a container
-    #   condition: evt.type = execve and evt.dir=< and container.id != host and proc.name = sudo
-    #   output: "Sudo run in container (user=%user.name %container.info parent=%proc.pname cmdline=%proc.cmdline)"
-    #   priority: ERROR
-    #   tags: [users, container]
-  
-    # Or override/append to any rule, macro, or list from the Default Rules
+  falco_rules.local.yaml: "#\n# Copyright (C) 2019 The Falco Authors.\n#\n#\n# Licensed
+    under the Apache License, Version 2.0 (the \"License\");\n# you may not use this
+    file except in compliance with the License.\n# You may obtain a copy of the License
+    at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by
+    applicable law or agreed to in writing, software\n# distributed under the License
+    is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.\n# See the License for the specific language governing
+    permissions and\n# limitations under the License.\n#\n\n####################\n#
+    Your custom rules!\n####################\n\n# Add new rules, like this one\n# -
+    rule: The program \"sudo\" is run in a container\n#   desc: An event will trigger
+    every time you run sudo in a container\n#   condition: evt.type = execve and evt.dir=<
+    and container.id != host and proc.name = sudo\n#   output: \"Sudo run in container
+    (user=%user.name %container.info parent=%proc.pname cmdline=%proc.cmdline)\"\n#
+    \  priority: ERROR\n#   tags: [users, container]\n\n# Or override/append to any
+    rule, macro, or list from the Default Rules\n  \n\n# EXPERIMENTAL RULE 1\n\n# dumpe2fs
+    detection associated with ext2, ext3 o ext4 filesystems (OnPremise Clusters)\n#
+    \"mv core.\" It's experimental related with core dumps. [gcore]\n# \"strings core.\"
+    It's experimental related with credential dumping [gcore]\n# \"dotnet-dump\" It's
+    experimental [azure]\n- list: memory_dump_binaries\n  items: [coredumpctl, gcore,
+    memdump, dumpe2fs, dotnet-dump]\n\n- macro: memory_dump_procs\n  condition: proc.name
+    in (memory_dump_binaries) or (proc.cmdline startswith \"dd if=/\" or proc.cmdline
+    startswith \"mv core.\" or proc.cmdline startswith \"strings core.\")\n\n- rule:
+    Memory dump process in Container [custom]\n  desc: Memory dumping process run inside
+    container\n  condition: >\n    spawned_process\n    and container\n    and memory_dump_procs\n
+    \ enabled: true\n  output: >\n    Memory dump process launched in container (user=%user.name
+    user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
+    container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n# EXPERIMENTAL
+    RULE 2\n\n# https://falco.org/docs/rules/fd-sip-name/\n# https://sysdig.es/blog/unexpected-domain-connection/\n#
+    proc.cmdline\":\"falco --cri /run/containerd/containerd.sock -pk  (Exception)\n\n#
+    fd.sip\tIPADDR\tserver IP address.\n# fd.sip.name\tCHARBUF\tDomain name associated
+    with the [s]erver IP address.\n# fd.snet\tIPNET\tmatches the [s]erver IP network
+    of the fd.\n# fd.ip\tIPADDR\tmatches the ip address (client or server) of the fd.\n#
+    fd.rip.name\tCHARBUF\tDomain name associated with the [r]emote IP address.\n# fd.cip.name\tCHARBUF\tDomain
+    name associated with the client IP address.\n\n- list: ngrok_outbound_destination_domains\n
+    \ items: [ngrok-free.app, www.ngrok.com, ngrok.com, ngrok.io, ngrok.dev, katestapp.ngrok.io]\n\n-
+    rule: Connect to ngrok service [custom]\n  desc: Detect Connects to NGROK\n  condition:
+    >\n    evt.type=connect and outbound and\n    (fd.sip.name in (ngrok_outbound_destination_domains))
+    and not\n    proc.cmdline startswith falco\n  enabled: true\n  output: Some connect
+    to NGROK (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid
+    user=%user.name user_loginuid=%user.loginuid container_id=%container.id image=%container.image.repository)\n
+    \ priority: INFO\n  tags: [network]\n\n\n# EXPERIMENTAL RULE 3\n# spawned_process\n\n-
+    rule: Ngrok service download/configuration/start [custom]\n  desc: Detect ngrok
+    service download/configuration/start\n  condition: >\n    proc.cmdline contains
+    \"ngrok authtoken\" or proc.cmdline contains \"ngrok http\" or proc.cmdline contains
+    \"ngrok tcp\" or\n     proc.cmdline contains \"ngrok tls\" or proc.cmdline contains
+    \"ngrok tunnel\" or proc.cmdline contains \"ngrok start\" or\n     fd.name=/root/.ngrok2/ngrok.yml
+    or proc.cmdline glob 'wget *.ngrok*'\n  enabled: true\n  output: ngrok service download/configuration/start
+    is detected (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid
+    user=%user.name user_loginuid=%user.loginuid container_id=%container.id container_name=%container.name
+    image=%container.image.repository)\n  priority: INFO\n  tags: [network]\n\n# ./ngrok\n# unzip
+    ngrok-linux-amd64.zip\n# ./ngrok authtoken <TOKEN>\n# Authtoken saved to configuration
+    file: /root/.ngrok2/ngrok.yml\n# tar -xvf ngrok-stable-linux-amd64.zip\n# https://aef0-44-197-144-69.ngrok-free.app\n#
+    and fd.name glob '/home/*/.ssh/*'\n# and fd.nameraw glob '*../*../*'\n# proc.cmdline
+    glob 'wget *.ngrok*'\n\n\n# EXPERIMENTAL RULE 4\n# https://kubeshark.co/install\n\n-
+    list: kubernetes_malicious_binaries\n  items: [peirates, kubeshark]\n\n- macro:
+    kubernetes_malicious_procs\n  condition: proc.name in (kubernetes_malicious_binaries)\n\n-
+    rule: Kubernetes malicious tools [custom]\n  desc: Kubernetes malicious process
+    run inside container\n  condition: >\n    spawned_process\n    and container\n    and
+    kubernetes_malicious_procs\n  enabled: true\n  output: >\n    Kubernetes malicious
+    process launched in container (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
+    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_discovery]\n\n\n# EXPERIMENTAL
+    RULE 5\n\n- list: sqli_binaries\n  items: [sqlmap]\n\n- macro: sql_injection_procs\n
+    \ condition: proc.name in (sqli_binaries) or (proc.cmdline startswith \"python sqlmap.py\"
+    or proc.cmdline startswith \"python3 sqlmap.py\")\n\n- rule: SQL injection tools
+    detected in Container [custom]\n  desc: SQL injection tool run inside container\n
+    \ condition: >\n    spawned_process\n    and container\n    and sql_injection_procs\n
+    \ enabled: true\n  output: >\n    SQL injection process launched in container (user=%user.name
+    user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
+    container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n"
   falco_rules.yaml: "#\n# Copyright (C) 2022 The Falco Authors. comentario test\n#\n#\n#
     Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not
     use this file except in compliance with the License.\n# You may obtain a copy of
@@ -1199,11 +1240,11 @@ data:
     \ tags: [filesystem, mitre_discovery, mitre_exfiltration, mitre_credential_access,
     IRT_Alert]\n\n# This rule is disabled by default as many system management tools\n#
     like ansible, etc can read these files/paths. Enable it using this macro.\n\n- macro:
-    user_known_read_ssh_information_activities\n  condition: (never_true)\n\n- macro:
-    meli_read_ssh_information_cmdtuning\n  condition: (proc.cmdline startswith \"analyzer\"
-    or proc.cmdline=\"du -hd1\" or proc.cmdline=\"mbdaemon\")\n\n# Baseline rules\n#
-    Tuning: whitelist proc.cmdline using meli_read_ssh_information_cmdtuning\n# Tuning:
-    whitelist MELI images using allowed_meli_images list\n- rule: Read ssh information\n
+    user_known_read_ssh_information_activities\n  condition: (never_true)\n\n# Disk
+    size inspection du -hd1\n- macro: meli_read_ssh_information_cmdtuning\n  condition:
+    (proc.cmdline startswith \"analyzer\" or proc.cmdline=\"du -hd1\" or proc.cmdline=mbdaemon)\n\n#
+    Baseline rules\n# Tuning: whitelist proc.cmdline using meli_read_ssh_information_cmdtuning\n#
+    Tuning: whitelist MELI images using allowed_meli_images list\n- rule: Read ssh information\n
     \ desc: Any attempt to read files below ssh directories by non-ssh programs\n  condition:
     >\n    ((open_read or open_directory) and\n     (user_ssh_directory or fd.name startswith
     /root/.ssh) and\n     not user_known_read_ssh_information_activities and\n     not
@@ -1440,31 +1481,32 @@ data:
     \"tzdata.postinst\" or\n               proc.cmdline startswith \"authconfig\" or
     proc.cmdline startswith \"dbus.postinst\" or proc.cmdline startswith \"authconfig
     /sbin/authconfig\" or\n               proc.cmdline startswith \"executor --dockerfile\"
-    or proc.cmdline=\"falcon-sensor\")\n\n# Baseline rules\n# Tuning: whitelist proc.cmdline
-    using meli_read_snstv_file_untrusted_cmdtuning\n# Tuning: whitelist MELI images
-    using allowed_meli_images list\n- rule: Read sensitive file untrusted\n  desc: >\n
-    \   an attempt to read any sensitive file (e.g. files containing user/password/authentication\n
-    \   information). Exceptions are made for known trusted programs.\n  condition:
-    >\n    sensitive_files and open_read\n    and proc_name_exists\n    and not proc.name
-    in (user_mgmt_binaries, userexec_binaries, package_mgmt_binaries,\n     cron_binaries,
-    read_sensitive_file_binaries, shell_binaries, hids_binaries,\n     vpn_binaries,
-    mail_config_binaries, nomachine_binaries, sshkit_script_binaries,\n     in.proftpd,
-    mandb, salt-minion, postgres_mgmt_binaries,\n     google_oslogin_\n     )\n    and
-    not cmp_cp_by_passwd\n    and not ansible_running_python\n    and not run_by_qualys\n
-    \   and not run_by_chef\n    and not run_by_google_accounts_daemon\n    and not
-    user_read_sensitive_file_conditions\n    and not mandb_postinst\n    and not perl_running_plesk\n
-    \   and not perl_running_updmap\n    and not veritas_driver_script\n    and not
-    perl_running_centrifydc\n    and not runuser_reading_pam\n    and not linux_bench_reading_etc_shadow\n
-    \   and not user_known_read_sensitive_files_activities\n    and not user_read_sensitive_file_containers\n
-    \   and not meli_read_snstv_file_untrusted_cmdtuning\n    and not container.image.repository
-    in (allowed_meli_images)\n  enabled: true\n  output: >\n    Sensitive file opened
-    for reading by non-trusted program (user=%user.name user_loginuid=%user.loginuid
-    program=%proc.name\n    command=%proc.cmdline pid=%proc.pid file=%fd.name parent=%proc.pname
-    gparent=%proc.aname[2] ggparent=%proc.aname[3] gggparent=%proc.aname[4] container_id=%container.id
-    image=%container.image.repository)\n  priority: WARNING\n  tags: [filesystem, mitre_credential_access,
-    mitre_discovery]\n\n- macro: amazon_linux_running_python_yum\n  condition: >\n    (proc.name
-    = python and\n     proc.pcmdline = \"python -m amazon_linux_extras system_motd\"
-    and\n     proc.cmdline startswith \"python -c import yum;\")\n\n- macro: user_known_write_rpm_database_activities\n
+    or proc.cmdline=falcon-sensor or proc.cmdline startswith \"executor --context\")\n\n#
+    Baseline rules\n# Tuning: whitelist proc.cmdline using meli_read_snstv_file_untrusted_cmdtuning\n#
+    Tuning: whitelist MELI images using allowed_meli_images list\n- rule: Read sensitive
+    file untrusted\n  desc: >\n    an attempt to read any sensitive file (e.g. files
+    containing user/password/authentication\n    information). Exceptions are made for
+    known trusted programs.\n  condition: >\n    sensitive_files and open_read\n    and
+    proc_name_exists\n    and not proc.name in (user_mgmt_binaries, userexec_binaries,
+    package_mgmt_binaries,\n     cron_binaries, read_sensitive_file_binaries, shell_binaries,
+    hids_binaries,\n     vpn_binaries, mail_config_binaries, nomachine_binaries, sshkit_script_binaries,\n
+    \    in.proftpd, mandb, salt-minion, postgres_mgmt_binaries,\n     google_oslogin_\n
+    \    )\n    and not cmp_cp_by_passwd\n    and not ansible_running_python\n    and
+    not run_by_qualys\n    and not run_by_chef\n    and not run_by_google_accounts_daemon\n
+    \   and not user_read_sensitive_file_conditions\n    and not mandb_postinst\n    and
+    not perl_running_plesk\n    and not perl_running_updmap\n    and not veritas_driver_script\n
+    \   and not perl_running_centrifydc\n    and not runuser_reading_pam\n    and not
+    linux_bench_reading_etc_shadow\n    and not user_known_read_sensitive_files_activities\n
+    \   and not user_read_sensitive_file_containers\n    and not meli_read_snstv_file_untrusted_cmdtuning\n
+    \   and not container.image.repository in (allowed_meli_images)\n  enabled: true\n
+    \ output: >\n    Sensitive file opened for reading by non-trusted program (user=%user.name
+    user_loginuid=%user.loginuid program=%proc.name\n    command=%proc.cmdline pid=%proc.pid
+    file=%fd.name parent=%proc.pname gparent=%proc.aname[2] ggparent=%proc.aname[3]
+    gggparent=%proc.aname[4] container_id=%container.id image=%container.image.repository)\n
+    \ priority: WARNING\n  tags: [filesystem, mitre_credential_access, mitre_discovery]\n\n-
+    macro: amazon_linux_running_python_yum\n  condition: >\n    (proc.name = python
+    and\n     proc.pcmdline = \"python -m amazon_linux_extras system_motd\" and\n     proc.cmdline
+    startswith \"python -c import yum;\")\n\n- macro: user_known_write_rpm_database_activities\n
     \ condition: (never_true)\n\n- macro: meli_write_below_rpm_database_cmdtuning\n
     \ condition: (proc.cmdline startswith \"python2.7 -u ./main_entrance.py\"  or proc.cmdline
     startswith \"exe / /var/lib/docker/overlay2\" or\n               proc.cmdline startswith
@@ -1727,14 +1769,15 @@ data:
     \"aws-ebs-csi-dri\" or proc.cmdline contains \"init.sh\" or proc.cmdline contains
     \"flexvol.sh\" or\n               proc.cmdline startswith \"node-cache\" or proc.cmdline
     startswith \"netd\" or proc.cmdline startswith \"ip-masq-agent\" or\n               proc.cmdline
-    startswith \"docker-init\" or proc.cmdline contains \"dockerd\" or proc.cmdline
-    contains \"dockerd-entrypo\" or\n               proc.cmdline startswith \"dind\"
-    or proc.cmdline contains \"containerd\" or\n               proc.cmdline startswith
-    \"falco --cri\" or proc.cmdline startswith \"secrets-store-c\" or proc.cmdline startswith
-    \"gce-pd-csi-driv\" or\n               proc.cmdline contains \"csi\" or proc.cmdline
-    contains \"csi-driver\" or proc.cmdline startswith \"container:\" or\n               proc.cmdline
-    contains \"docker.sock\" or proc.cmdline startswith \"dockerd-entrypo\" or proc.cmdline
-    startswith \"dockerd\" or\n               proc.cmdline contains \"/usr/local/bin/dind\")\n\n-
+    startswith \"docker-init\" or proc.cmdline contains dockerd or proc.cmdline contains
+    \"dockerd-entrypo\" or\n               proc.cmdline startswith dind or proc.cmdline
+    contains \"containerd\" or\n               proc.cmdline startswith \"falco --cri\"
+    or proc.cmdline startswith \"secrets-store-c\" or proc.cmdline startswith \"gce-pd-csi-driv\"
+    or\n               proc.cmdline contains \"csi\" or proc.cmdline contains \"csi-driver\"
+    or proc.cmdline startswith \"container:\" or\n               proc.cmdline contains
+    \"docker.sock\" or proc.cmdline startswith dockerd-entrypo or proc.cmdline startswith
+    dockerd or\n               proc.cmdline contains \"/usr/local/bin/dind\" or proc.cmdline
+    contains \"aws-vpc-cni-ini\" or proc.cmdline startswith \"gce-pd-csi-driv\")\n\n-
     rule: Launch Privileged Container\n  desc: Detect the initial process started in
     a privileged container. Exceptions are made for known trusted images.\n  condition:
     >\n    container_started and container\n    and container.privileged=true\n    and
@@ -1755,14 +1798,16 @@ data:
     or proc.cmdline startswith \"system-probe\" or proc.cmdline startswith \"sidecar-proxy-r\"
     or\n               proc.cmdline contains \"entrypoint.sh\" or proc.cmdline contains
     \"sidecar-proxy-r\" or proc.cmdline contains \"bash /init/init.sh\" or\n               proc.cmdline
-    startswith \"aws-ebs-csi-dri\" or proc.cmdline startswith \"runsvdir\" or proc.cmdline
+    startswith aws-ebs-csi-dri or proc.cmdline startswith \"runsvdir\" or proc.cmdline
     startswith \"pilot-agent\" or\n               proc.cmdline startswith \"netd-init\"
     or proc.cmdline startswith \"start_runit\" or proc.cmdline startswith \"node-cache\"
     or\n               proc.cmdline startswith \"ip-masq-agent\" or proc.cmdline startswith
     \"ip-masq-agent\" or proc.cmdline startswith \"flexvol.sh\" or\n               proc.cmdline
     startswith \"gce-pd-csi-driv\" or proc.cmdline startswith \"netd\" or proc.cmdline
     startswith \"cilium-agent\" or\n               proc.cmdline startswith \"init-container\"
-    or proc.cmdline startswith \"init-container\")\n\n- rule: Launch Excessively Capable
+    or proc.cmdline startswith \"init-container\" or proc.cmdline startswith install
+    or\n               proc.cmdline startswith aws-vpc-cni or proc.cmdline contains
+    cilium or proc.cmdline startswith proxy-init)\n\n- rule: Launch Excessively Capable
     Container\n  desc: Detect container started with a powerful set of capabilities.
     Exceptions are made for known trusted images.\n  condition: >\n    container_started
     and container\n    and excessively_capable_container\n    and not falco_privileged_containers\n
@@ -1799,12 +1844,14 @@ data:
     \"process-agent\" or proc.cmdline startswith \"watcher --backend_server\" or\n      proc.cmdline=\"node-terminatio\"
     or proc.cmdline contains \"datadog-agent\" or proc.cmdline contains \"datadog\"
     or\n      proc.cmdline contains \"kubelet\" or proc.cmdline contains \"system-probe\"
-    or proc.cmdline startswith \"start-amazon-cl\")\n\n- macro: meli_sensitive_mount_container_img_rpstry_tuning\n
-    \ condition: (container.image.repository contains \"datadog\" or container.image.repository
-    contains \"agent\")\n\n- rule: Launch Sensitive Mount Container\n  desc: >\n    Detect
-    the initial process started by a container that has a mount from a sensitive host
-    directory\n    (i.e. /proc). Exceptions are made for known trusted images.\n  condition:
-    >\n    container_started and container\n    and sensitive_mount\n    and not falco_sensitive_mount_containers\n
+    or proc.cmdline startswith \"start-amazon-cl\" or\n      proc.cmdline startswith
+    aws-ebs-csi-dri or proc.cmdline startswith gce-pd-csi-driv or proc.cmdline contains
+    cilium)\n\n- macro: meli_sensitive_mount_container_img_rpstry_tuning\n  condition:
+    (container.image.repository contains \"datadog\" or container.image.repository contains
+    \"agent\")\n\n- rule: Launch Sensitive Mount Container\n  desc: >\n    Detect the
+    initial process started by a container that has a mount from a sensitive host directory\n
+    \   (i.e. /proc). Exceptions are made for known trusted images.\n  condition: >\n
+    \   container_started and container\n    and sensitive_mount\n    and not falco_sensitive_mount_containers\n
     \   and not user_sensitive_mount_containers\n    and not meli_sensitive_mount_container_cmdtuning\n
     \   and not meli_sensitive_mount_container_img_rpstry_tuning\n  enabled: true\n
     \ output: Container with sensitive mount started (user=%user.name user_loginuid=%user.loginuid
@@ -2006,8 +2053,9 @@ data:
     list: allowed_dev_files\n  items: [\n    /dev/null, /dev/stdin, /dev/stdout, /dev/stderr,\n
     \   /dev/random, /dev/urandom, /dev/console, /dev/kmsg\n    ]\n\n- macro: user_known_create_files_below_dev_activities\n
     \ condition: (never_true)\n\n- macro: meli_create_files_below_dev_cmdtuning\n  condition:
-    (proc.cmdline startswith \"csi-\" or proc.cmdline startswith \"argoexec\") \n\n#
-    (we may need to add additional checks against false positives, see:\n# https://bugs.launchpad.net/ubuntu/+source/rkhunter/+bug/86153)\n#
+    (proc.cmdline startswith \"csi-\" or proc.cmdline startswith \"argoexec\" or proc.cmdline
+    startswith entry or proc.cmdline=\"tee -a /dev/termination-log\") \n\n# (we may
+    need to add additional checks against false positives, see:\n# https://bugs.launchpad.net/ubuntu/+source/rkhunter/+bug/86153)\n#
     Baseline rules\n- rule: Create files below dev\n  desc: creating any files below
     /dev other than known programs that manage devices. Some rootkits hide files in
     /dev.\n  condition: >\n    fd.directory = /dev and\n    (evt.type = creat or (evt.type
@@ -2184,17 +2232,18 @@ data:
     endswith \"containernetworking/azure-npm\")\n\n\n- macro: meli_clear_log_activities_cmdtuning\n
     \ condition: (proc.cmdline=containerd or proc.cmdline startswith \"dockerd\" or
     proc.cmdline startswith \"nvidia-installe\" or\n   proc.cmdline contains \"nvidia-installe\"
-    or proc.cmdline=vmtoolsd or proc.cmdline contains \"containerd\" or proc.cmdline
-    contains \"rancher\" or\n   proc.cmdline contains \"dockerd\" or proc.cmdline contains
-    \"rke2\" or proc.cmdline= wss://socket.cl or proc.cmdline startswith \"executor
-    --context\" or\n   proc.cmdline=falcon-sensor-b or proc.cmdline=vmtoolsd or proc.cmdline=mbdaemon
-    or proc.cmdline startswith \"executor --dockerfile\" or proc.cmdline startswith
-    \"fontconfig.post\")\n\n- rule: Clear Log Activities\n  desc: Detect clearing of
-    critical log files\n  condition: >\n    open_write and\n    access_log_files and\n
-    \   evt.arg.flags contains \"O_TRUNC\" and\n    not trusted_logging_images and\n
-    \   not allowed_clear_log_files and\n    not meli_clear_log_activities_cmdtuning\n
-    \ enabled: true\n  output: >\n    Log files were tampered (user=%user.name user_loginuid=%user.loginuid
-    command=%proc.cmdline pid=%proc.pid file=%fd.name container_id=%container.id image=%container.image.repository)\n
+    or proc.cmdline=vmtoolsd or proc.cmdline contains containerd or proc.cmdline contains
+    \"rancher\" or\n   proc.cmdline contains \"dockerd\" or proc.cmdline contains \"rke2\"
+    or proc.cmdline= wss://socket.cl or proc.cmdline startswith \"executor --context\"
+    or\n   proc.cmdline=falcon-sensor-b or proc.cmdline=vmtoolsd or proc.cmdline=mbdaemon
+    or proc.cmdline startswith \"executor --dockerfile\" or\n   proc.cmdline startswith
+    \"fontconfig.post\" or proc.cmdline startswith vmtoolsd or proc.cmdline startswith
+    mbdaemon)\n\n- rule: Clear Log Activities\n  desc: Detect clearing of critical log
+    files\n  condition: >\n    open_write and\n    access_log_files and\n    evt.arg.flags
+    contains \"O_TRUNC\" and\n    not trusted_logging_images and\n    not allowed_clear_log_files
+    and\n    not meli_clear_log_activities_cmdtuning\n  enabled: true\n  output: >\n
+    \   Log files were tampered (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
+    pid=%proc.pid file=%fd.name container_id=%container.id image=%container.image.repository)\n
     \ priority:\n    WARNING\n  tags: [file, mitre_defense_evasion]\n\n- list: data_remove_commands\n
     \ items: [shred, mkfs, mke2fs]\n\n- macro: clear_data_procs\n  condition: (proc.name
     in (data_remove_commands))\n\n- macro: user_known_remove_data_activities\n  condition:
@@ -2422,13 +2471,14 @@ data:
     \"cilium-agent\" or\n   proc.cmdline startswith \"uwsgi\" or proc.cmdline startswith
     \"ksops\" or proc.cmdline contains \"datadog\" or proc.cmdline startswith \"otelcol\"
     or\n   proc.cmdline contains \"otelcol\" or proc.cmdline=app or proc.cmdline startswith
-    \"calico-node\" or proc.cmdline startswith \"node-cache\" or\n   proc.cmdline startswith
+    \"calico-node\" or proc.cmdline startswith node-cache or\n   proc.cmdline startswith
     \"grpc-health-pro\" or proc.cmdline contains \"argocd\" or proc.cmdline startswith
     \"argocd\" or proc.cmdline startswith \"kube-proxy\" or\n   proc.cmdline startswith
     \"git\" or proc.cmdline startswith \"ping\" or proc.cmdline startswith \"aws-ebs-csi-dri\"
     or proc.cmdline contains \"kubelet\" or\n   proc.cmdline startswith \"chromium-browse\"
-    or proc.cmdline startswith \"rancher\" or proc.cmdline contains \"gitlab\")\n\n-
-    macro: meli_redirect_stdout_stdin_ntwrk_cnnctn_container_img_rpstry_tuning\n  condition:
+    or proc.cmdline startswith \"rancher\" or proc.cmdline contains \"gitlab\" or proc.cmdline
+    startswith argocd-repo-ser or\n   proc.cmdline startswith kustomize)\n\n- macro:
+    meli_redirect_stdout_stdin_ntwrk_cnnctn_container_img_rpstry_tuning\n  condition:
     (container.image.repository=\"registry.gitlab.com/gitlab-org/build/cng/gitlab-workhorse-ce\"
     or container.image.repository=\"registry.gitlab.com/gitlab-org/build/cng/gitlab-shell\"
     or\n   container.image.repository contains \"gitlab\" or container.image.repository
@@ -2624,17 +2674,18 @@ data:
     proc.cmdline startswith \"bundle-certific\" or\n   proc.cmdline contains \"gitlab\"
     or proc.cmdline=\"agent\" or proc.cmdline startswith \"apache2\" or proc.cmdline=\"sh
     /config/configure\" or\n   proc.cmdline=\"sh -c /app/app\" or proc.cmdline startswith
-    \"backup-utility\" or proc.cmdline startswith \"otelcol\")\n\n# Gitlab\n- rule:
-    Modify Container Entrypoint\n  desc: This rule detect an attempt to write on container
-    entrypoint symlink (/proc/self/exe). Possible CVE-2019-5736 Container Breakout exploitation
-    attempt.\n  condition: >\n    open_write and container and (fd.name=/proc/self/exe
-    or fd.name startswith /proc/self/fd/) and not docker_procs and not proc.cmdline
-    = \"runc:[1:CHILD] init\"\n    and not meli_modify_container_entrypoint_cmdtuning\n
-    \ enabled: true\n  output: >\n    Detect Potential Container Breakout Exploit (CVE-2019-5736)
-    (user=%user.name process=%proc.name file=%fd.name cmdline=%proc.cmdline pid=%proc.pid
-    %container.info)\n  priority: WARNING\n  tags: [container, filesystem, mitre_initial_access]\n\n#
-    Application rules have moved to application_rules.yaml. Please look\n# there if
-    you want to enable them by adding to\n# falco_rules.local.yaml.\n\n- list: known_binaries_to_read_environment_variables_from_proc_files\n
+    \"backup-utility\" or proc.cmdline startswith \"otelcol\" or proc.cmdline startswith
+    \"s6-svscan\")\n\n# Gitlab\n- rule: Modify Container Entrypoint\n  desc: This rule
+    detect an attempt to write on container entrypoint symlink (/proc/self/exe). Possible
+    CVE-2019-5736 Container Breakout exploitation attempt.\n  condition: >\n    open_write
+    and container and (fd.name=/proc/self/exe or fd.name startswith /proc/self/fd/)
+    and not docker_procs and not proc.cmdline = \"runc:[1:CHILD] init\"\n    and not
+    meli_modify_container_entrypoint_cmdtuning\n  enabled: true\n  output: >\n    Detect
+    Potential Container Breakout Exploit (CVE-2019-5736) (user=%user.name process=%proc.name
+    file=%fd.name cmdline=%proc.cmdline pid=%proc.pid %container.info)\n  priority:
+    WARNING\n  tags: [container, filesystem, mitre_initial_access]\n\n# Application
+    rules have moved to application_rules.yaml. Please look\n# there if you want to
+    enable them by adding to\n# falco_rules.local.yaml.\n\n- list: known_binaries_to_read_environment_variables_from_proc_files\n
     \ items: [scsi_id, argoexec]\n\n- macro: meli_read_env_variable_from_proc_files_cmdtuning\n
     \ condition: (proc.cmdline startswith \"otelcol\" or proc.cmdline=\"app\" or proc.cmdline
     startswith \"systemd-run\" or proc.cmdline contains \"jenkins.war\" or\n   proc.cmdline=\"otelcol
@@ -2645,10 +2696,12 @@ data:
     ./entrypoint.sh\" or proc.cmdline startswith \"cilium-agent\" or proc.cmdline startswith
     \"metricbeat\" or proc.cmdline startswith \"datadog\" or\n   proc.cmdline startswith
     \"grpc-health-pro\" or proc.cmdline startswith \"systemctl\" or proc.cmdline startswith
-    \"filebeat\")\n\n# Datadog (proc.cmdline=\"app\"), Jenkins\n- rule: Read environment
-    variable from /proc files\n  desc: An attempt to read process environment variables
-    from /proc files\n  condition: >\n    open_read and container and (fd.name glob
-    /proc/*/environ)\n    and not proc.name in (known_binaries_to_read_environment_variables_from_proc_files)\n
+    \"filebeat\" or proc.cmdline=\"agent run\" or\n   proc.cmdline contains jenkins
+    or proc.cmdline startswith ld-musl-x86_64. or proc.cmdline startswith sampler)\n\n#
+    Datadog (proc.cmdline=\"app\"), Jenkins\n- rule: Read environment variable from
+    /proc files\n  desc: An attempt to read process environment variables from /proc
+    files\n  condition: >\n    open_read and container and (fd.name glob /proc/*/environ)\n
+    \   and not proc.name in (known_binaries_to_read_environment_variables_from_proc_files)\n
     \   and not meli_read_env_variable_from_proc_files_cmdtuning\n  enabled: true\n
     \ output: >\n    Environment variables were retrieved from /proc files (user=%user.name
     user_loginuid=%user.loginuid program=%proc.name\n    command=%proc.cmdline pid=%proc.pid
