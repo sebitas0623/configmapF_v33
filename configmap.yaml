@@ -2707,7 +2707,8 @@ data:
     user_loginuid=%user.loginuid program=%proc.name\n    command=%proc.cmdline pid=%proc.pid
     file=%fd.name parent=%proc.pname gparent=%proc.aname[2] ggparent=%proc.aname[3]
     gggparent=%proc.aname[4] container_id=%container.id image=%container.image.repository)\n
-    \ priority: WARNING\n  tags: [filesystem, mitre_credential_access, mitre_discovery]\n"
+    \ priority: WARNING\n  tags: [filesystem, mitre_credential_access, mitre_discovery,
+    testborrar]\n"
   k8s_audit_rules.yaml: |
     #
     # Copyright (C) 2022 The Falco Authors.
