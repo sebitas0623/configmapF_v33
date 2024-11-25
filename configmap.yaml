@@ -1,5 +1,4 @@
 ---
-# comentario de test
 # Source: falco-obsec/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -734,13 +733,13 @@ data:
     memdump, dumpe2fs, dotnet-dump]\n\n- macro: memory_dump_procs\n  condition: proc.name
     in (memory_dump_binaries) or (proc.cmdline startswith \"dd if=/\" or proc.cmdline
     startswith \"mv core.\" or proc.cmdline startswith \"strings core.\")\n\n- rule:
-    Memory dump process in Container [custom]\n  desc: Memory dumping process run inside
-    container\n  condition: >\n    spawned_process\n    and container\n    and memory_dump_procs\n
-    \ enabled: true\n  output: >\n    Memory dump process launched in container (user=%user.name
-    user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
-    container_name=%container.name image=%container.image.repository:%container.image.tag)\n
-    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n# EXPERIMENTAL
-    RULE 2\n\n# https://falco.org/docs/rules/fd-sip-name/\n# https://sysdig.es/blog/unexpected-domain-connection/\n#
+    Memory dump process in Container [custom]\n  desc: Detects processes initiating
+    memory dumps inside a container\n  condition: >\n    spawned_process\n    and container\n
+    \   and memory_dump_procs\n  enabled: true\n  output: >\n    Memory dump process
+    launched in container (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
+    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_credential_access, mitre_exfiltration]\n\n\n#
+    EXPERIMENTAL RULE 2\n\n# https://falco.org/docs/rules/fd-sip-name/\n# https://sysdig.es/blog/unexpected-domain-connection/\n#
     proc.cmdline\":\"falco --cri /run/containerd/containerd.sock -pk  (Exception)\n\n#
     fd.sip\tIPADDR\tserver IP address.\n# fd.sip.name\tCHARBUF\tDomain name associated
     with the [s]erver IP address.\n# fd.snet\tIPNET\tmatches the [s]erver IP network
@@ -748,20 +747,21 @@ data:
     fd.rip.name\tCHARBUF\tDomain name associated with the [r]emote IP address.\n# fd.cip.name\tCHARBUF\tDomain
     name associated with the client IP address.\n\n- list: ngrok_outbound_destination_domains\n
     \ items: [ngrok-free.app, www.ngrok.com, ngrok.com, ngrok.io, ngrok.dev]\n\n- rule:
-    Connect to ngrok service [custom]\n  desc: Detect Connects to NGROK\n  condition:
-    >\n    evt.type=connect and outbound and\n    (fd.sip.name in (ngrok_outbound_destination_domains))
+    Connect to NGROK Service [Custom]\n  desc: Detects connections to the NGROK service\n
+    \ condition: >\n    evt.type=connect and outbound and\n    (fd.sip.name in (ngrok_outbound_destination_domains))
     and not\n    proc.cmdline startswith falco\n  enabled: true\n  output: Some connect
     to NGROK (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid
     user=%user.name user_loginuid=%user.loginuid container_id=%container.id image=%container.image.repository)\n
-    \ priority: INFO\n  tags: [network]\n\n\n# EXPERIMENTAL RULE 3\n# spawned_process\n\n-
-    rule: Ngrok service download/configuration/start [custom]\n  desc: Detect ngrok
-    service download/configuration/start\n  condition: >\n    proc.cmdline contains
-    \"ngrok authtoken\" or proc.cmdline contains \"ngrok http\" or proc.cmdline contains
-    \"ngrok tcp\" or\n     proc.cmdline contains \"ngrok tls\" or proc.cmdline contains
-    \"ngrok tunnel\" or proc.cmdline contains \"ngrok start\" or\n     fd.name=/root/.ngrok2/ngrok.yml
-    or proc.cmdline glob 'wget *.ngrok*'\n  enabled: true\n  output: ngrok service download/configuration/start
-    is detected (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid
-    user=%user.name user_loginuid=%user.loginuid container_id=%container.id container_name=%container.name
+    \ priority: INFO\n  tags: [network, mitre_command_and_control]\n\n\n# EXPERIMENTAL
+    RULE 3\n# spawned_process\n\n- rule: Ngrok service download/configuration/start
+    [custom]\n  desc: Detect ngrok service download/configuration/start\n  condition:
+    >\n    proc.cmdline contains \"ngrok authtoken\" or proc.cmdline contains \"ngrok
+    http\" or proc.cmdline contains \"ngrok tcp\" or\n     proc.cmdline contains \"ngrok
+    tls\" or proc.cmdline contains \"ngrok tunnel\" or proc.cmdline contains \"ngrok
+    start\" or\n     fd.name=/root/.ngrok2/ngrok.yml or proc.cmdline glob 'wget *.ngrok*'\n
+    \ enabled: true\n  output: ngrok service download/configuration/start is detected
+    (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name
+    user_loginuid=%user.loginuid container_id=%container.id container_name=%container.name
     image=%container.image.repository)\n  priority: INFO\n  tags: [network]\n\n# ./ngrok\n# unzip
     ngrok-linux-amd64.zip\n# ./ngrok authtoken <TOKEN>\n# Authtoken saved to configuration
     file: /root/.ngrok2/ngrok.yml\n# tar -xvf ngrok-stable-linux-amd64.zip\n# https://aef0-44-197-144-69.ngrok-free.app\n#
@@ -769,98 +769,470 @@ data:
     glob 'wget *.ngrok*'\n\n\n# EXPERIMENTAL RULE 4\n# https://kubeshark.co/install\n\n-
     list: kubernetes_malicious_binaries\n  items: [peirates, kubeshark]\n\n- macro:
     kubernetes_malicious_procs\n  condition: proc.name in (kubernetes_malicious_binaries)\n\n-
-    rule: Kubernetes malicious tools [custom]\n  desc: Kubernetes malicious process
-    run inside container\n  condition: >\n    spawned_process\n    and container\n    and
-    kubernetes_malicious_procs\n  enabled: true\n  output: >\n    Kubernetes malicious
-    process launched in container (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
-    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
-    \ priority: NOTICE\n  tags: [process, container, mitre_discovery]\n\n\n# EXPERIMENTAL
-    RULE 5\n\n- list: sqli_binaries\n  items: [sqlmap]\n\n- macro: sql_injection_procs\n
+    rule: Launch malicious Kubernetes Tools inside a Node [Custom]\n  desc: Detects
+    the execution of malicious tools or penetration testing activities within a Kubernetes
+    cluster, indicating potential security threats\n  condition: >\n    spawned_process\n
+    \   and container\n    and kubernetes_malicious_procs\n  enabled: true\n  output:
+    >\n    Kubernetes malicious process launched in container (user=%user.name user_loginuid=%user.loginuid\n
+    \   command=%proc.cmdline container_id=%container.id container_name=%container.name
+    image=%container.image.repository:%container.image.tag Custom_Tags=IRT_Alert)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_discovery, IRT_Alert]\n\n\n#
+    EXPERIMENTAL RULE 5\n\n- list: sqli_binaries\n  items: [sqlmap]\n\n- macro: sql_injection_procs\n
     \ condition: proc.name in (sqli_binaries) or (proc.cmdline startswith \"python sqlmap.py\"
     or proc.cmdline startswith \"python3 sqlmap.py\")\n\n- rule: SQL injection tools
     detected in Container [custom]\n  desc: SQL injection tool run inside container\n
     \ condition: >\n    spawned_process\n    and container\n    and sql_injection_procs\n
     \ enabled: true\n  output: >\n    SQL injection tools launched in container (user=%user.name
     user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
-    container_name=%container.name image=%container.image.repository:%container.image.tag)\n
-    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n# EXPERIMENTAL
-    RULE 6\n# SQL injection patterns are complex. Falco does not support regex as such.
-    It's depends the database product.\n# Tuning advice: approach2 (sqli types)\n\n-
-    macro: sqli_patterns\n  #condition: (fd.nameraw contains '../' and fd.nameraw glob
-    '*../*../*')\n  condition: (fd.nameraw contains 'or 1=1' or fd.nameraw glob 'UNION
-    ALL SELECT' or fd.nameraw glob 'UNION ALL SELECT' or fd.nameraw glob 'UNION SELECT'\n
-    \  or fd.nameraw contains 'union select database(), database();#' or fd.nameraw
-    contains 'union select null,null,null,null' or fd.nameraw contains 'sleep(5)#'\n
-    \  or fd.nameraw contains ';waitfor delay' or fd.nameraw contains 'ORDER BY SLEEP(5)')\n\n-
-    rule: SQL injection patterns detected inside container [custom]\n  desc: >\n    Web
-    applications may be vulnerable to SQL injection attacks, allowing malicious manipulation
-    of database queries. These attacks often involve the unauthorized insertion of SQL
-    code through the application's input parameters.\n    Access patterns to the database
-    that deviate from standard SQL queries, such as attempts to concatenate or manipulate
-    parameters, can be considered suspicious behavior.\n    This rule includes the detection
-    of failed attempts to execute malicious SQL queries, which may indicate potential
-    SQL injection attempts.\n  # condition: (open_read or open_file_failed) and (etc_dir
-    or user_ssh_directory or fd.name startswith /root/.ssh or fd.name contains \"id_rsa\")
-    and directory_traversal and not proc.pname in (shell_binaries)\n  condition: (open_read
-    or open_file_failed) and (etc_dir or user_ssh_directory or fd.name startswith /root/.ssh
-    or fd.name contains \"id_rsa\") and sqli_patterns and not proc.pname in (shell_binaries)\n
-    \ enabled: true\n  output: >\n    SQL injection patterns detected inside container
-    (username=%user.name useruid=%user.uid user_loginuid=%user.loginuid program=%proc.name
-    exe=%proc.exepath\n    command=%proc.cmdline pid=%proc.pid parent=%proc.pname file=%fd.name
-    fileraw=%fd.nameraw parent=%proc.pname\n    gparent=%proc.aname[2] container_id=%container.id
-    image=%container.image.repository returncode=%evt.res cwd=%proc.cwd)\n  priority:
-    WARNING\n  tags: [filesystem, mitre_exfiltration, mitre_credential_access]\n\n\n\n#
+    container_name=%container.name image=%container.image.repository:%container.image.tag
+    Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [process, container, mitre_exfiltration,
+    IRT_Alert]\n\n\n# EXPERIMENTAL RULE 6\n# SQL injection patterns are complex. Falco
+    does not support regex as such. It's depends the database product.\n# Tuning advice:
+    approach2 (sqli types)\n\n- macro: sqli_patterns\n  #condition: (fd.nameraw contains
+    '../' and fd.nameraw glob '*../*../*')\n  condition: (fd.nameraw contains 'or 1=1'
+    or fd.nameraw glob 'UNION ALL SELECT' or fd.nameraw glob 'UNION ALL SELECT' or fd.nameraw
+    glob 'UNION SELECT'\n   or fd.nameraw contains 'union select database(), database();#'
+    or fd.nameraw contains 'union select null,null,null,null' or fd.nameraw contains
+    'sleep(5)#'\n   or fd.nameraw contains ';waitfor delay' or fd.nameraw contains 'ORDER
+    BY SLEEP(5)')\n\n- rule: SQL injection patterns detected inside container [custom]\n
+    \ desc: >\n    Web applications may be vulnerable to SQL injection attacks, allowing
+    malicious manipulation of database queries. These attacks often involve the unauthorized
+    insertion of SQL code through the application's input parameters.\n    Access patterns
+    to the database that deviate from standard SQL queries, such as attempts to concatenate
+    or manipulate parameters, can be considered suspicious behavior.\n    This rule
+    includes the detection of failed attempts to execute malicious SQL queries, which
+    may indicate potential SQL injection attempts.\n  # condition: (open_read or open_file_failed)
+    and (etc_dir or user_ssh_directory or fd.name startswith /root/.ssh or fd.name contains
+    \"id_rsa\") and directory_traversal and not proc.pname in (shell_binaries)\n  condition:
+    (open_read or open_file_failed) and (etc_dir or user_ssh_directory or fd.name startswith
+    /root/.ssh or fd.name contains \"id_rsa\") and sqli_patterns and not proc.pname
+    in (shell_binaries)\n  enabled: true\n  output: >\n    SQL injection patterns detected
+    inside container (username=%user.name useruid=%user.uid user_loginuid=%user.loginuid
+    program=%proc.name exe=%proc.exepath\n    command=%proc.cmdline pid=%proc.pid parent=%proc.pname
+    file=%fd.name fileraw=%fd.nameraw parent=%proc.pname\n    gparent=%proc.aname[2]
+    container_id=%container.id image=%container.image.repository returncode=%evt.res
+    cwd=%proc.cwd)\n  priority: WARNING\n  tags: [filesystem, mitre_exfiltration, mitre_credential_access]\n\n\n\n#
     EXPERIMENTAL RULE 7\n# Pending nuclei as vulnerability scanner.\n\n- list: scanner_binaries\n
     \ items: [masscan, rustscan, \"nasl -t\", \"nmap --script\", nuclei]\n\n- macro:
     scanning_procs\n  condition: proc.name in (scanner_binaries) or (proc.cmdline glob
     'wget *.nasl*' or proc.cmdline startswith 'nasl -t' or proc.cmdline endswith '.nse')\n\n-
-    rule: Scanner or automated tools launched in container [custom]\n  desc: Scanner
+    rule: Scanner or Automated Tools launched in Container [custom]\n  desc: Scanner
     or automated tool process run inside container\n  condition: >\n    spawned_process\n
     \   and container\n    and scanning_procs\n  enabled: true\n  output: >\n    Scanner
     or automated tool process run inside container (user=%user.name user_loginuid=%user.loginuid\n
     \   command=%proc.cmdline container_id=%container.id container_name=%container.name
-    image=%container.image.repository:%container.image.tag)\n  priority: NOTICE\n  tags:
-    [process, container, mitre_discovery]\n\n\n\n# EXPERIMENTAL RULE 8\n# Pending proxychains
-    PoC and others ...\n# mitre_command_and_control, mitre_defense_evasion, mitre_lateral_movement
-    ?\n\n- list: vpn_tunnelproxy_outbound_destination_domains\n  items: [shadowsocks.org]\n\n-
-    list: tunnelproxy_binaries\n  items: [sslocal, ssserver, ssmanager, ssurl, shadowsocks-rust,
-    proxychains]\n\n- rule: Connect to VPN/Tunnel or proxy server [custom]\n  desc:
-    Detect connection to VPN/Tunnel or proxy server\n  condition: >\n    spawned_process
-    and container and (proc.name in (tunnelproxy_binaries) or fd.sip.name in (vpn_tunnelproxy_outbound_destination_domains))\n
+    image=%container.image.repository:%container.image.tag Custom_Tags=IRT_Alert)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_discovery, IRT_Alert]\n\n\n\n#
+    EXPERIMENTAL RULE 8\n# Pending proxychains PoC and others ...\n# mitre_command_and_control,
+    mitre_defense_evasion, mitre_lateral_movement ?\n\n- list: vpn_tunnelproxy_outbound_destination_domains\n
+    \ items: [shadowsocks.org]\n\n- list: tunnelproxy_binaries\n  items: [sslocal, ssserver,
+    ssmanager, ssurl, shadowsocks-rust, proxychains, graftcp-local, graftcp, mgraftcp]\n\n-
+    rule: Connect to VPN/Tunnel or proxy server [custom]\n  desc: Detect connection
+    to VPN/Tunnel or proxy server\n  condition: >\n    spawned_process and container
+    and (proc.name in (tunnelproxy_binaries) or fd.sip.name in (vpn_tunnelproxy_outbound_destination_domains))\n
     \ enabled: true\n  output: Some connect to VPN/Tunnel or proxy server (command=%proc.cmdline
     connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid
-    container_id=%container.id image=%container.image.repository)\n  priority: INFO\n
-    \ tags: [network, mitre_defense_evasion]\n\n\n\n# EXPERIMENTAL RULE 9 (kubectl evil
-    commands)\n\n- list: kubectl_malicious_binaries\n  items: []\n\n- macro: kubectl_suspicious_procs\n
-    \ condition: proc.name in (kubectl_malicious_binaries) or (proc.cmdline startswith
-    \"kubectl auth can-i create pods\" or proc.cmdline startswith \"kubectl api-resources\"
-    or\n   proc.cmdline startswith \"env | grep -i kube\" or proc.cmdline startswith
-    \"ps –ef | grep etcd\" or proc.cmdline startswith \"kubectl run r00t\" or proc.cmdline
-    startswith \"ps –ef | grep kubelet\" )\n\n- rule: kubectl suspicious command launched
-    in a container [custom]\n  desc: kubectl suspicious command launched in a container\n
-    \ condition: >\n    spawned_process\n    and container\n    and kubectl_suspicious_procs\n
-    \ enabled: true\n  output: >\n    kubectl suspicious command in container (user=%user.name
+    container_id=%container.id image=%container.image.repository Custom_Tags=IRT_Alert)\n
+    \ priority: INFO\n  tags: [network, mitre_defense_evasion, IRT_Alert]\n\n\n\n# EXPERIMENTAL
+    RULE 9 (kubectl evil commands)\n# The name will change [Kubernetes malicious commands
+    or Kubernetes malicious tools]\n\n- list: kubectl_malicious_binaries\n  items: []\n\n-
+    macro: kubectl_suspicious_procs\n  condition: proc.name in (kubectl_malicious_binaries)
+    or (proc.cmdline startswith \"kubectl auth can-i create pods\" or proc.cmdline startswith
+    \"kubectl api-resources\" or\n   proc.cmdline startswith \"env | grep -i kube\"
+    or proc.cmdline startswith \"ps –ef | grep etcd\" or proc.cmdline startswith \"kubectl
+    run r00t\" or proc.cmdline startswith \"ps –ef | grep kubelet\" )\n\n- rule: Kubectl
+    Suspicious Command launched in Container [custom]\n  desc: Kubectl suspicious command
+    launched in container\n  condition: >\n    spawned_process\n    and container\n
+    \   and kubectl_suspicious_procs\n  enabled: true\n  output: >\n    kubectl suspicious
+    command in container (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
+    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag
+    Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [process, container, mitre_exfiltration,
+    IRT_Alert]\n\n\n\n# EXPERIMENTAL RULE 10 \n# Test obsec Rule [custom]\n- rule: Obsec
+    Test Rule - Please ignore this event [custom]\n  desc: Obsec Activity, please ignore
+    this event\n  condition: evt.type = execve and evt.dir=< and \n   (proc.name=obsec-test-rule
+    or container.image.repository = fury-registry.adminml.com/obsec-test-rule:1.0.0
+    or proc.args contains \"--obsec\")\n  enabled: false\n  output: \"Obsec Test Rule
+    - Please ignore this event (user=%user.name %container.info parent=%proc.pname cmdline=%proc.cmdline
+    image=%container.image.repository process=%proc.name)\"\n  priority: INFO\n  tags:
+    [users, container]\n\n\n\n# EXPERIMENTAL RULE 11\n# \n- list: load_tester_binaries\n
+    \ items: [siege, bombardier, httperf, slowhttptest, stress-ng]\n\n- macro: benchmarking_procs\n
+    \ condition: proc.name in (load_tester_binaries) or (proc.cmdline startswith \"ab
+    -n\" or proc.cmdline startswith \"baton -u\" or\n   proc.cmdline startswith \"h2load
+    -n\" or proc.cmdline startswith \"slowhttptest -c\")\n\n- rule: Load tester/benchmarking
+    utility detected inside a Container [custom]\n  desc: load tester/benchmarking utility
+    [custom]\n  condition: >\n    spawned_process\n    and container\n    and benchmarking_procs\n
+    \ enabled: true\n  output: >\n    load tester/benchmarking utility process launched
+    in container (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
+    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag
+    Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [process, container, mitre_exfiltration,
+    IRT_Alert]\n\n\n## EXPERIMENTAL RULE 12 - Exploitation attempt detected inside a
+    container [custom]\n\n# metasploit_monitored_files: Any interaction with these files
+    is a potential risk.\n\n## [In Incubation]\n\n- list: metasploit_frmk_binaries\n
+    \ items: [msfconsole, msfvenom, msfdb, msfd, msfrpc, metasploit-web, hydra, arp-scan]
+    # Remember related binaries, modules, shells & others\n\n- macro: metasploit_frmk_procs\n
+    \ condition: proc.name in (metasploit_frmk_binaries) or (proc.cmdline startswith
+    \"msfconsole -q\") #or proc.cmdline contains \"metasploit-framework\"\n\n- list:
+    metasploit_critical_paths\n  items: [/home/msf_user, /usr/share/metasploit-framework,
+    /opt/metasploit-framework, /usr/share/metasploit]\n\n- macro: metasploit_monitored_files\n
+    \ condition: fd.name in (metasploit_critical_paths)\n\n- rule: Exploitation attempt
+    detected inside a container [custom]\n  desc: Exploitation attempt detected inside
+    a container [custom]\n  condition: >\n    (spawned_process\n    and container\n
+    \   and metasploit_frmk_procs) or metasploit_monitored_files\n  enabled: true\n
+    \ output: >\n    Exploitation attempt detected inside a container (user=%user.name
     user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
     container_name=%container.name image=%container.image.repository:%container.image.tag)\n
-    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n\n# EXPERIMENTAL
-    RULE 10 \n# Test obsec Rule [custom]\n- rule: Obsec Test Rule - Please ignore this
-    event [custom]\n  desc: Obsec Activity, please ignore this event\n  condition: evt.type
-    = execve and evt.dir=< and \n   (proc.name=obsec-test-rule or container.image.repository
-    = fury-registry.adminml.com/obsec-test-rule:1.0.0 or proc.args contains \"--obsec\")\n
-    \ output: \"Obsec Test Rule - Please ignore this event (user=%user.name %container.info
-    parent=%proc.pname cmdline=%proc.cmdline image=%container.image.repository process=%proc.name)\"\n
-    \ priority: INFO\n  tags: [users, container]\n\n\n\n# EXPERIMENTAL RULE 11\n# \n-
-    list: load_tester_binaries\n  items: [siege, bombardier, httperf, slowhttptest,
-    stress-ng]\n\n- macro: benchmarking_procs\n  condition: proc.name in (load_tester_binaries)
-    or (proc.cmdline startswith \"ab -n\" or proc.cmdline startswith \"baton -u\" or\n
-    \  proc.cmdline startswith \"h2load -n\" or proc.cmdline startswith \"slowhttptest
-    -c\")\n\n- rule: load tester/benchmarking utility detected inside a container [custom]\n
-    \ desc: load tester/benchmarking utility [custom]\n  condition: >\n    spawned_process\n
-    \   and container\n    and benchmarking_procs\n  enabled: true\n  output: >\n    load
-    tester/benchmarking utility process launched in container (user=%user.name user_loginuid=%user.loginuid\n
+    \ priority: CRITICAL\n  tags: [process, container]\n\n\n\n## EXPERIMENTAL RULE 13
+    - Privilege Escalation behavior detected based bad permissions [custom]\n## Remember
+    add bypass\n\n- macro: pe_based_bad_perm_macro\n  condition: >\n    proc.name=\"find\"
+    and ((proc.args contains \"-perm 777\") or (proc.args contains \"-perm -777\") or
+    (proc.args contains \"-perm 0777\") or (proc.args contains \"-perm -0777\") or \n
+    \    (proc.args contains \"-perm 766\") or (proc.args contains \"-perm -766\") or
+    (proc.args contains \"-perm 0766\") or (proc.args contains \"-perm -0766\") or \n
+    \    (proc.args contains \"-perm 222\") or (proc.args contains \"-perm -222\") or
+    (proc.args contains \"-perm 0222\") or (proc.args contains \"-perm -0222\") or\n
+    \    (proc.args contains \"-perm 220\") or (proc.args contains \"-perm -220\") or
+    (proc.args contains \"-perm 0220\") or (proc.args contains \"-perm -0220\") or \n
+    \    (proc.args contains \"-perm u=rwx,g=rwx,o=rwx\") or (proc.args contains \"-perm
+    a=rwx\") or (proc.args contains \"-perm u=rwx,g=rw,o=rw\") or\n     (proc.args contains
+    \"-perm u=w,g=w,o=w\") or (proc.args contains \"-perm u=w,g=w\") or (proc.args contains
+    \"-writable ! -user\") or (proc.args contains \"-readable ! -user\")\n      )\n\n-
+    rule: Privilege Escalation behavior detected based bad permissions [custom]\n  desc:
+    Privilege Escalation behavior detected based bad permissions [custom]\n  condition:
+    >\n    spawned_process\n    and container\n    and pe_based_bad_perm_macro\n  enabled:
+    true\n  output: >\n\n    Privilege Escalation behavior detected based bad permissions
+    [custom] (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
+    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n# EXPERIMENTAL
+    RULE 14 - Privilege Escalation behavior based SUID/GUID detected [custom]\n# Corrects
+    bypasses\n\n- macro: pe_based_suid_macro\n  condition: >\n    proc.name=\"find\"
+    and (((proc.args contains \"-type f\") and (proc.args contains \"-perm -u=s\"))
+    or ((proc.args contains \"-perm -u=s\") and (proc.args contains \"-type f\")) or\n
+    \    ((proc.args contains \"-type f\") and (proc.args contains \"-perm -g=s\"))
+    or ((proc.args contains \"-perm -g=s\") and (proc.args contains \"-type f\")) or\n
+    \     ((proc.args contains \"-perm -1000\") and (proc.args contains \"-type d\"))
+    or ((proc.args contains \"-type d\") and (proc.args contains \"-perm -1000\")) or
+    \n      ((proc.args contains \"-perm -2000\") and (proc.args contains \"-type d\"))
+    or ((proc.args contains \"-type d\") and (proc.args contains \"-perm -2000\")) or\n
+    \     ((proc.args contains \"-perm -4000\") and (proc.args contains \"-type d\"))
+    or ((proc.args contains \"-type d\") and (proc.args contains \"-perm -4000\")) or\n
+    \     (proc.args contains \"-uid 0\") or ((proc.args contains \"-exec /bin/sh\")
+    or (proc.args contains \"-exec sh\") or proc.args contains -quit))\n\n- rule: Privilege
+    Escalation behavior detected based SUID [custom]\n  desc: Privilege escalation behavior
+    based on searching for files or directories with special permissions.\n  condition:
+    >\n    spawned_process\n    and container\n    and pe_based_suid_macro\n  enabled:
+    true\n  output: >\n    Privilege Escalation behavior based SUID detected [custom]
+    (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
+    container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n\n## EXPERIMENTAL
+    RULE 15 - Privilege Escalation Tools/Patterns detected [custom]\n\n- macro: privilege_escalation_download_tools\n
+    \ condition: proc.cmdline contains /peass-ng or proc.cmdline contains linpeas.sh
+    or proc.cmdline contains linpeas_linux_amd64 or proc.cmdline contains linpeas.txt
+    or proc.cmdline contains LinPEAS.sh or\n   proc.cmdline contains LinEnum.sh or proc.cmdline
+    contains linuxprivchecker.py or proc.cmdline contains /linuxprivchecker.py or proc.cmdline
+    contains linuxprivchecker or proc.cmdline contains linuxprivchecker or\n   proc.cmdline
+    contains linuxprivchecker.log or proc.cmdline contains \"python linuxprivchecker.py\"
+    or proc.cmdline contains /les2.pl or proc.cmdline contains linux-exploit-suggester-2.pl
+    or\n   proc.cmdline contains /dirty or proc.cmdline contains upc.sh\n\n- macro:
+    privilege_escalation_suspicious_commands\n  condition: proc.cmdline=\"ps -aux |
+    grep root\" or proc.cmdline=\"nmap --interactive\" or proc.cmdline=\"sudo -l\" or
+    proc.cmdline=\"VALIDAR DEMAS SLIDES\" # or proc.cmdline=\"sudo find /home -exec
+    sh -i \\\"\n\n- rule: Privilege Escalation Tools/Patterns detected in Container
+    [custom]\n  desc: Privilege Escalation Tools/Patterns detected\n  condition: >\n
+    \   privilege_escalation_download_tools or privilege_escalation_suspicious_commands\n
+    \ enabled: true\n  output: Privilege Escalation Generic [custom] (command=%proc.cmdline
+    connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid
+    container_id=%container.id image=%container.image.repository)\n  priority: INFO\n
+    \ tags: [network, mitre_privilege_escalation]\n\n\n## EXPERIMENTAL RULE 16 - MiTM
+    behavior detected inside a container\n\n- list: mitm_binary_list\n  items: [ettercap,
+    bettercap , sslstrip, arpspoof]\n\n# dsniff (This package contains several tools
+    to listen to and create network traffic)\n# arpspoof, dnsspoof, dsniff, filesnarf,
+    macof, mailsnarf, msgsnarf, sshmitm, sshow, tcpkill, tcpnice, urlsnarf, webmitm,
+    webspy\n\n- macro: dns_spooofing_pattern\n  condition: proc.cmdline=\"cat /etc/resolv.conf\"
+    or proc.cmdline=\"cat /etc/nsswitch.conf | grep hosts\" or proc.cmdline=\"pscap
+    -a\" or proc.cmdline contains \"grep -i CAP_*\"\n\n- macro: mitm_macro\n  condition:
+    proc.name in (mitm_binary_list) or (proc.cmdline = \"pscap -a\" or proc.cmdline
+    startswith \"echo 1 > /proc/sys/net/ipv4/ip_forward\" or proc.cmdline startswith
+    \"sysctl net.ipv4.ip_forward=1\")\n\n- rule: MiTM behavior detected inside a container
+    [custom]\n  desc: MiTM behavior detected inside a container [custom]\n  condition:
+    >\n    spawned_process\n    and container\n    and mitm_macro or dns_spooofing_pattern\n
+    \ enabled: true\n  output: >\n    MiTM behavior detected inside a container (user=%user.name
+    user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
+    container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n## EXPERIMENTAL
+    RULE 17 - Malicious curl commands [custom]\n\n- macro: suspicious_curl_command \n
+    \ condition: proc.cmdline startswith \"curl -x socks5h://proxy:\" or proc.cmdline
+    contains \" -s | bash\" or proc.cmdline startswith \"curl --max-time\" or\n   proc.cmdline
+    contains \"curl --trace\"\n\n#  \" -s | bash\"  change by proc.name=curl and proc.cmdline
+    contains \"-s | bash\"\n\n# Future Improvement \"/usr/bin/nc -lp\" \n# Maybe require
+    A param in proc.cmdline\n\n# User Agent (-A)\n- macro: curl_command_injection\n
+    \ condition: proc.name=curl and\n              (proc.cmdline contains \"../../../../../\"
+    or\n              proc.cmdline contains \"<script>alert\" or\n              proc.cmdline
+    contains \"/bin/bash\" or \n              proc.cmdline contains \"/usr/bin/nc\"
+    or \n              proc.cmdline contains \"/bin/bash -c\" or\n              proc.cmdline
+    contains \"cat /etc/passwd\")\n\n# User Agent (-A)\n- macro: curl_sql_injection\n
+    \ condition: proc.name=curl and\n              (proc.cmdline contains \"sleep(\"
+    or\n              proc.cmdline contains \"concat(\" or\n              proc.cmdline
+    contains \"OR 1 = 1\" or \n              proc.cmdline contains \"cat /etc/passwd\")\n\n#
+    Store and Reflected XSS\n# Bad bots: It's not a good idea to overload Falco.\n\n-
+    rule: Suspicious Curl Activity [custom]\n  desc: Detects potentially dangerous curl
+    commands in containers, focusing on command injection, malicious User-Agent headers,
+    SQL injection patterns, and suspicious use of proxies or tracing options.\n  condition:
+    >\n    container and (curl_command_injection or curl_sql_injection or suspicious_curl_command)\n
+    \ enabled: true\n  output: Malicious curl commands (command=%proc.cmdline connection=%fd.name
+    IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid container_id=%container.id
+    image=%container.image.repository)\n  priority: CRITICAL\n  tags: [mitre_privilege_execution,
+    container, host, process]\n\n\n## EXPERIMENTAL RULE 18 - Container escape behaviors
+    detected inside a container [custom]\n\n## [In Incubation]\n\n- macro: container_escapes_execution_tools\n
+    \ condition: proc.cmdline contains /deepce.sh or proc.cmdline contains /stealthcopter/deepce/raw/main/deepce.sh
+    or proc.cmdline contains /cdk or proc.cmdline='go run cdk.go' or\n   proc.cmdline
+    contains JailWhale.sh # or proc.cmdline=\"curl http://localhost:8080/JailWhale.sh
+    | sh\"\n\n\n- rule: Container escapes behaviors detected inside a container [custom]\n
+    \ desc: Detects enumeration and execution attempts related to container escape tools
+    inside a container.\n  condition: >\n    container_escapes_execution_tools\n  enabled:
+    true\n  output: Container escapes behaviors detected inside the container [custom]
+    (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name
+    user_loginuid=%user.loginuid container_id=%container.id image=%container.image.repository)\n
+    \ priority: INFO\n  tags: [mitre_privilege_escalation, host, container, process]\n\n\n##
+    EXPERIMENTAL RULE 19 - Container escape behavior based core pattern [custom]\n\n#
+    It is not normal for the operating system to directly modify the /proc/sys/kernel/core_pattern
+    file in a stable production environment. This setting is set at operating system
+    installation and remains unchanged unless applied.\n# Exceptions: Configuration
+    management tools may make dynamic changes to the file.\n\n# /etc/sysctl.conf another
+    alternative  (permanent change)\n# kernel.core_pattern = \"|/path/to/script.sh\"\n\n-
+    macro: modify_coredumps\n  condition: fd.name contains core_pattern or fd.name=/proc/sys/kernel/core_pattern
+    or proc.cmdline contains /proc/sys/kernel/core_pattern or proc.cmdline startswith
+    \"sysctl -w kernel.core_pattern\"\n\n# - macro: PENDING INVOKE modify_coredumps
+    and coredumps_behaviors\n\n- macro: coredumps_behaviors\n  condition: proc.cmdline
+    contains \"ulimit -a | grep core\" or proc.cmdline=\"ulimit -c unlimited\"\n\n#
+    CorePatternModification; if doesn't works with open_write change by spawned_process\n\n-
+    rule: Container Escape using core_pattern escape [custom]\n  desc: Detects unauthorized
+    changes to the core dump configuration file (core_pattern), an integral component
+    within Linux systems. This behavior can lead to a container escape.\n  condition:
+    >\n    open_write and container and (fd.name contains core_pattern or fd.name=/proc/sys/kernel/core_pattern
+    or proc.cmdline contains /proc/sys/kernel/core_pattern)\n  enabled: true\n  output:
+    Container Escape using core_pattern escape [custom] (command=%proc.cmdline connection=%fd.name
+    IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid container_id=%container.id
+    image=%container.image.repository)\n  priority: CRITICAL\n  tags: [mitre_privilege_escalation,
+    mitre_lateral_movement, mitre_exfiltration, mitre_execution, custom_rule]\n\n\n\n##
+    EXPERIMENTAL RULE 20 - Container escape behavior based binfmt_misc [custom]\n\n#
+    An attacant can get root access if /proc/sys/fs/binfmt_misc/register file is writeable.\n\n-
+    rule: Container escape behavior based binfmt_misc [custom]\n  desc: Detects attempts
+    to modify the /proc/sys/fs/binfmt_misc file, which can grant an attacker root access
+    and enable container escape.\n  condition: >\n    open_write and container and (fd.name
+    contains binfmt_misc or fd.name=/proc/sys/fs/binfmt_misc)\n  enabled: true\n  output:
+    Container escape behavior based binfmt_misc [custom] (command=%proc.cmdline connection=%fd.name
+    IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid container_id=%container.id
+    image=%container.image.repository)\n  priority: CRITICAL\n  tags: [mitre_privilege_escalation,
+    process, mitre_lateral_movement]\n\n\n\n## EXPERIMENTAL RULE 21 - Container escape
+    behavior based mknod [custom]\n## [In Incubation]\n## mknod (change focus to CVE)\n\n\n\n##
+    EXPERIMENTAL RULE 22 - container escape based nsenter maybe buffer overflow [CVE-2017-7308]\n##
+    [In Incubation]\n## Applies for Linux 4.8.0 < 4.8.0-46\n\n\n\n## EXPERIMENTAL RULE
+    23 - Container Escape based Lorem Ipsum\n## [In Conception]\n##\n\n\n\n## EXPERIMENTAL
+    RULE 24 - Container Escape based Lorem Ipsum\n## [In Conception]\n##\n\n\n\n## EXPERIMENTAL
+    RULE 25 - Container Escape based Lorem Ipsum\n## [In Conception]\n##\n\n\n\n## EXPERIMENTAL
+    RULE 26 - Web Scanner process detected inside a container [custom]\n\n- macro: burpsuite_process
+    \n  condition: proc.cmdline startswith \"java -jar burpsuite_community.jar\" or
+    proc.cmdline contains /burp/config/project_options.json or\n    proc.cmdline contains
+    /burp/config/user_options.json  # pending validate in professional version\n\n#
+    Validate ZAP string length /zap/zap.sh\n- macro: zed_attack_proxy_process\n  condition:
+    fd.name glob '/ZAP*_unix.sh' or proc.cmdline contains ZAP or proc.name contains
+    zaproxy or proc.cmdline contains zaproxy or fd.name contains zaproxy or\n   container.image.repository
+    contains zaproxy or fd.name contains zap.jar or proc.cmdline=\"java -jar zap.jar\"
+    or proc.cmdline=\"zap.sh\"\n\n- rule: Web Scanner process detected inside a container
+    [custom]\n  desc: Web Scanner process detected inside a container\n  condition:
+    >\n    container and (burpsuite_process or zed_attack_proxy_process)\n  enabled:
+    true\n  output: Web Scanner process detected inside a container (command=%proc.cmdline
+    connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid
+    container_id=%container.id image=%container.image.repository Custom_Tags=IRT_Alert)\n
+    \ priority: CRITICAL\n  tags: [mitre_privilege_escalation, process, mitre_lateral_movement,
+    IRT_Alert]\n\n\n\n## EXPERIMENTAL RULE 27 - Keys extraction activity detected in
+    container [custom]\n# Risk: Vaults & Secrets managers can trigger false positives.\n\n-
+    macro: secrets_API_key_or_tokens\n  condition: >\n    (proc.args icontains \"bucket_password\"
+    or proc.args icontains \"client_secret\" or proc.args icontains \"credentials\"
+    or proc.args icontains \"app_secret\" or\n     proc.args icontains \"AWSSecretKey\"
+    or proc.args icontains \"connectionstring\" or proc.args icontains \"database_password\"
+    or proc.args icontains \"db_password\" or\n     proc.args icontains \"db_username\"
+    or proc.args icontains \"dbpasswd\" or proc.args icontains \"dbpassword\" or proc.args
+    icontains \"dbuser\" or\n     proc.args icontains \"gmail_password\" or proc.args
+    icontains \"gmail_username\" or proc.args icontains \"keyPassword\" or proc.args
+    icontains \"pem private\" or\n     proc.args icontains \"redis_password\" or proc.args
+    icontains \"secret\" or proc.args icontains \"secret.password\" or proc.args icontains
+    \"security_credentials\" or\n     proc.args icontains \"sql_password\" or proc.args
+    icontains \"ssh2_auth_password\" or proc.args icontains \"storePassword\" or proc.args
+    icontains \"secrets.yml\" or\n     proc.args icontains \"shadow\" or proc.args icontains
+    \"ssh2_auth_password\" or proc.args icontains \"storePassword\" or proc.args icontains
+    \"secrets.yml\" or\n     proc.args icontains \"sql_password\" or proc.args icontains
+    \"AWS_ACCESS_KEY_ID\" or proc.args icontains \"list_aws_accounts\" or proc.args
+    icontains \"aws_access_key\" or\n     proc.args icontains \"aws_secret_key\" or
+    proc.args icontains \"S3_ACCESS_KEY_ID\" or proc.args icontains \"S3_BUCKET\" or
+    proc.args icontains \"S3_ENDPOINT\" or\n     proc.args icontains \"S3_SECRET_ACCESS_KEY\"
+    or proc.args icontains \"PT_TOKEN\" or proc.args icontains \"redis_password\" or
+    proc.args icontains \"root_password\" or\n     proc.args icontains \"secret_access_key\"
+    or proc.args icontains \"SECRET_KEY_BASE\" or proc.args icontains \"AWS_SECRET_ACCESS_KEY\"
+    or proc.args icontains \"S3_ENDPOINT\" or\n     proc.args icontains \"aws_secret_key\"
+    or proc.args icontains \"S3_ACCESS_KEY_ID\" or proc.args icontains \"S3_BUCKET\"
+    or proc.args icontains \"S3_ENDPOINT\"\n    )\n\n- macro: keys_extraction_binary_macro\n
+    \ condition: proc.name in (keys_extraction_binary_list)\n\n- list: keys_extraction_binary_list\n
+    \ items: [rsakeyfind, aeskeyfind]\n\n- macro: keys_extraction_find_based_macro\n
+    \ condition: >\n    proc.name=\"find\" and (proc.args contains \"-type f -name\")
+    and (proc.args contains \"*.pub\" or proc.args contains \"*.pem\" or\n     proc.args
+    contains \"*.crt\" or proc.args contains \"*.key\" or proc.args contains \"*.p12\")\n\n\n-
+    rule: Keys extraction activity detected in container [custom]\n  desc: > \n    Detects
+    unsanctioned attempts to search for private keys or passwords within a container
+    by utilizing common commands such as find, grep, \n    and other recognized binaries.\n
+    \ condition: >\n    spawned_process\n    and container\n    and ((grep_commands
+    and secrets_API_key_or_tokens) or (keys_extraction_find_based_macro) or (keys_extraction_binary_macro))\n
+    \ enabled: true\n  output: >\n    Keys extraction activity detected in container
+    [custom] (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
+    container_id=%container.id container_name=%container.name image=%container.image.repository:%container.image.tag)\n
+    \ priority: NOTICE\n  tags: [process, container, mitre_exfiltration]\n\n\n\n## EXPERIMENTAL
+    RULE 28 - Fuzzy tools detected in container [custom]\n\n# web application fuzzers\n-
+    list: fuzzing_binary_list\n  items: [ffuf, dirbuster, feroxbuster, cifuzz, wfuzz,
+    rustbuster, dirsearch, sfuzz, sfo, dirb, vaf, fuzzdb]\n\n# pending protofuzz, fuzzdb
+    in another macro? Depending risk\n\n- macro: fuzzing_process\n  condition: proc.name
+    in (fuzzing_binary_list)\n\n# Deprecated in Mar 21, 2024. It's classic and used
+    in other projects.\n- list: afl_binaries\n  items: [afl-fuzz, afl-gcc, afl-g++,
+    afl-clang, afl-clang++, afl-as, afl-analyze, afl-cmin, afl-tmin, afl-whatsup, alf-plot,
+    afl-showmap, afl-qemu-trace, afl-gotcpu, afl-harden, afl-fuzz-qemuss]\n\n- macro:
+    american_fuzzy_lop\n  condition: proc.name in (afl_binaries)\n\n- rule: Fuzzing
+    tools detected in container [custom]\n  desc: Fuzzing tools detected in container
+    [custom]\n  condition: >\n    spawned_process\n    and container\n    and (fuzzing_process
+    or american_fuzzy_lop)\n  enabled: true\n  output: >\n    Unexpected fuzzing process
+    detected inside a container [custom] (user=%user.name user_loginuid=%user.loginuid\n
     \   command=%proc.cmdline container_id=%container.id container_name=%container.name
     image=%container.image.repository:%container.image.tag)\n  priority: NOTICE\n  tags:
-    [process, container, mitre_exfiltration]"
+    [process, container, mitre_exfiltration]\n\n\n\n## EXPERIMENTAL RULE 29 - NoSQL
+    Injection behaviors detected inside a container [custom]\n## [In Incubation]\n\n-
+    list: nosql_injection_binary_list\n  items: [nosqli, mongomap, nosqlmap, sqlscan]\n\n-
+    macro: nosql_injection_process\n  condition: proc.name in (nosql_injection_binary_list)\n\n-
+    rule: NoSQL Injection behaviors detected inside a container [custom]\n  desc: Detected
+    NoSQL Injection tools inside a container\n  condition: >\n    nosql_injection_process\n
+    \ enabled: true\n  output: Container escapes [custom] (command=%proc.cmdline connection=%fd.name
+    IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid container_id=%container.id
+    image=%container.image.repository)\n  priority: INFO\n  tags: [network]\n\n\n\n##
+    EXPERIMENTAL RULE 30 - Launch Advanced Network Toolset in container [custom]\n\n-
+    list: traffic_retransmission_binary_list\n  items: [tcpreplay, tcprewrite, tcpreplay-edit,
+    tcpprep, tcpbridge, tcpliveplay, tcpcapinfo, hping3, ndiff, nping, fping, hping3]\n\n-
+    macro: traffic_retransmission\n  condition: proc.name in (traffic_retransmission_binary_list)\n\n-
+    list: packet_crafting_binary_list\n  items: [hping3, ndiff, arping, nping, fping,
+    hping, nemesis]\n# ostinato\n# rpcclient\n\n# librerias apt install libnet1-dev;
+    pellegre/libcrafter; libpcap\n- macro: packet_crafting   # traffic simulation, traffic
+    generation\n  condition: proc.name in (packet_crafting_binary_list)\n\n- rule: Launch
+    Advanced Network Toolset in container [custom]\n  desc: Enhanced Suspicious Network
+    tool detected in container [custom]\n  condition: >\n    traffic_retransmission
+    or packet_crafting\n  enabled: true\n  output: Enhanced Suspicious Network tool
+    in container [custom] (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name
+    pid=%proc.pid user=%user.name user_loginuid=%user.loginuid container_id=%container.id
+    image=%container.image.repository Custom_Tags=IRT_Alert)\n  priority: INFO\n  tags:
+    [network, IRT_Alert]\n\n\n\n#########################    THIRD PARTY  RULES    #########################
+    \n\n\n# Hay otra regla que detecta release_agent (Detect release_agent File Container
+    Escapes) a partir de capabilities.\n- rule: Linux Cgroup Container Escape Vulnerability
+    (CVE-2022-4092)\n  desc: \"This rule detects an attempt to exploit a container escape
+    vulnerability in the Linux Kernel.\"\n  condition: container.id != \"\" and proc.name
+    = \"unshare\" and spawned_process and evt.args contains \"mount\" and evt.args contains
+    \"-o rdma\" and evt.args contains \"/release_agent\"\n  enabled: true\n  output:
+    \"Detect Linux Cgroup Container Escape Vulnerability (CVE-2022-4092) (user=%user.loginname
+    uid=%user.loginuid command=%proc.cmdline args=%proc.args)\"\n  priority: CRITICAL\n
+    \ tags: [process, mitre_privilege_escalation]\n\n\n- rule: Backdoored library loaded
+    into SSHD (CVE-2024-3094)\n  desc: A version of the liblzma library was seen loading
+    which was backdoored by a malicious user in order to bypass SSHD authentication.\n
+    \ condition: open_read and proc.name=sshd and (fd.name endswith \"liblzma.so.5.6.0\"
+    or fd.name endswith \"liblzma.so.5.6.1\")\n  enabled: true\n  output: SSHD Loaded
+    a vulnerable library (| file=%fd.name | proc.pname=%proc.pname gparent=%proc.aname[2]
+    ggparent=%proc.aname[3] gggparent=%proc.aname[4] image=%container.image.repository
+    | proc.cmdline=%proc.cmdline | container.name=%container.name | proc.cwd=%proc.cwd
+    proc.pcmdline=%proc.pcmdline user.name=%user.name user.loginuid=%user.loginuid user.uid=%user.uid
+    user.loginname=%user.loginname image=%container.image.repository | container.id=%container.id
+    | container_name=%container.name|  proc.cwd=%proc.cwd )\n  priority: WARNING\n  tags:
+    [host,container]  \n\n\n- rule: PTRACE anti-debug attempt\n  desc: > \n    Detect
+    usage of the PTRACE system call with the PTRACE_TRACEME argument, indicating a program
+    actively attempting \n    to avoid debuggers attaching to the process. This behavior
+    is typically indicative of malware activity.\n    Read more about PTRACE in the
+    \"PTRACE attached to process\" rule.\n  condition: > \n    evt.type=ptrace and evt.dir=>
+    \n    and evt.arg.request contains PTRACE_TRACEME \n    and proc_name_exists\n  enabled:
+    true\n  output: Detected potential PTRACE_TRACEME anti-debug attempt (proc_pcmdline=%proc.pcmdline
+    evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
+    process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline
+    terminal=%proc.tty %container.info)\n  priority: NOTICE\n  tags: [maturity_stable,
+    host, container, process, mitre_defense_evasion, T1622]\n\n\n\n- list: known_ptrace_binaries\n
+    \ items: []\n\n- macro: known_ptrace_procs\n  condition: (proc.name in (known_ptrace_binaries))\n\n-
+    macro: ptrace_attach_or_injection\n  condition: >\n    (evt.type=ptrace and evt.dir=>
+    and\n    (evt.arg.request contains PTRACE_POKETEXT or\n    evt.arg.request contains
+    PTRACE_POKEDATA or\n    evt.arg.request contains PTRACE_ATTACH or\n    evt.arg.request
+    contains PTRACE_SEIZE or\n    evt.arg.request contains PTRACE_SETREGS))\n\n# OSS
+    version\n- rule: PTRACE attached to process\n  desc: > \n    Detect an attempt to
+    inject potentially malicious code into a process using PTRACE in order to evade
+    \n    process-based defenses or elevate privileges. Common anti-patterns are debuggers.
+    Additionally, profiling \n    your environment via the known_ptrace_procs template
+    macro can reduce noise. \n    A successful ptrace syscall generates multiple logs
+    at once.\n  condition: > \n    ptrace_attach_or_injection \n    and proc_name_exists
+    \n    and not known_ptrace_procs\n  enabled: true\n  output: Detected ptrace PTRACE_ATTACH
+    attempt (proc_pcmdline=%proc.pcmdline evt_type=%evt.type user=%user.name user_uid=%user.uid
+    user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
+    command=%proc.cmdline terminal=%proc.tty %container.info)\n  priority: WARNING\n
+    \ tags: [maturity_stable, host, container, process, mitre_privilege_escalation,
+    T1055.008]\n\n\n\n- macro: private_aws_credentials\n  condition: >\n    (proc.args
+    icontains \"aws_access_key_id\" or\n    proc.args icontains \"aws_secret_access_key\"
+    or\n    proc.args icontains \"aws_session_token\" or\n    proc.args icontains \"accesskeyid\"
+    or\n    proc.args icontains \"secretaccesskey\")\n\n- rule: Find AWS Credentials\n
+    \ desc: >\n    Detect attempts to search for private keys or passwords using the
+    grep or find command, particularly targeting standard \n    AWS credential locations.
+    This is often seen with unsophisticated attackers, as there are many ways to access
+    files \n    using bash built-ins that could go unnoticed. Regardless, this serves
+    as a solid baseline detection that can be tailored \n    to cover these gaps while
+    maintaining an acceptable noise level. This rule complements the rule \"Search Private
+    Keys or Passwords\".\n  condition: >\n    spawned_process \n    and ((grep_commands
+    and private_aws_credentials) or\n         (proc.name = \"find\" and proc.args endswith
+    \".aws/credentials\"))\n  enabled: true\n  output: Detected AWS credentials search
+    activity (proc_pcmdline=%proc.pcmdline proc_cwd=%proc.cwd group_gid=%group.gid group_name=%group.name
+    user_loginname=%user.loginname evt_type=%evt.type user=%user.name user_uid=%user.uid
+    user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
+    command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags %container.info)\n
+    \ priority: WARNING\n  tags: [maturity_stable, host, container, process, aws, mitre_credential_access,
+    T1552]\n\n\n- rule: Execution from /dev/shm\n  desc: > \n    This rule detects file
+    execution in the /dev/shm directory, a tactic often used by threat actors to store
+    their readable, writable, and \n    occasionally executable files. /dev/shm acts
+    as a link to the host or other containers, creating vulnerabilities for their compromise
+    \n    as well. Notably, /dev/shm remains unchanged even after a container restart.
+    Consider this rule alongside the newer \n    \"Drop and execute new binary in container\"
+    rule.\n  condition: >\n    spawned_process \n    and (proc.exe startswith \"/dev/shm/\"
+    or \n        (proc.cwd startswith \"/dev/shm/\" and proc.exe startswith \"./\" )
+    or \n        (shell_procs and proc.args startswith \"-c /dev/shm\") or \n        (shell_procs
+    and proc.args startswith \"-i /dev/shm\") or \n        (shell_procs and proc.args
+    startswith \"/dev/shm\") or \n        (proc.cwd startswith \"/dev/shm/\" and proc.args
+    startswith \"./\" )) \n    and not container.image.repository in (falco_privileged_images,
+    trusted_images)\n  enabled: true\n  output: File execution detected from /dev/shm
+    (evt_res=%evt.res file=%fd.name proc_cwd=%proc.cwd proc_pcmdline=%proc.pcmdline
+    user_loginname=%user.loginname group_gid=%group.gid group_name=%group.name evt_type=%evt.type
+    user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
+    proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+    exe_flags=%evt.arg.flags %container.info)\n  priority: WARNING\n  tags: [maturity_stable,
+    host, container, mitre_execution, T1059.004]\n\n\n\n- macro: java_bash_python_bash\n
+    \ condition: proc.name in (shell_binaries) and proc.pname contains \"python\" and
+    proc.aname[2] in (shell_binaries) and proc.aname[3]=java\n- macro: java_python_bash\n
+    \ condition: proc.name in (shell_binaries) and proc.pname contains \"python\" and
+    proc.aname[2]=java\n\n- rule: Suspicious Java Child Processes\n  desc: Detect suspicious
+    process trees involving Java that are used to exploit Remote Code Execution\n  condition:
+    spawned_process and (java_bash_python_bash or java_python_bash)\n  enabled: true\n
+    \ output: Detecting Suspicious Java Child Processes (command=%proc.cmdline connection=%fd.name
+    user=%user.name user_login uid=%user.loginuid container_id=%container.id image=%container.image.repository)\n
+    \ priority: WARNING\n\n\n\n\n#########################    EXPLORATION  RULES    #########################\n\n\n##
+    EXPERIMENTAL RULE NN Backdoor in ZX Utils (CVE-2024-3094)\n\n- macro: CVE_2024_3094_scanning_scripts\n
+    \ condition: proc.cmdline contains xz_cve-2024-3094-detect.sh or proc.cmdline contains
+    scan_liblzma.sh or proc.cmdline contains CVE-2024-3094.sh\n\n- rule: Backdoor in
+    ZX Utils (CVE-2024-3094)[custom]\n  desc: Backdoor in ZX Utils (CVE-2024-3094)[custom]\n
+    \ condition: >\n    open_read\n    and container and CVE_2024_3094_scanning_scripts\n
+    \ enabled: true\n  output: >\n    Generic custom rules (user=%user.name user_loginuid=%user.loginuid\n
+    \   command=%proc.cmdline container_id=%container.id container_name=%container.name
+    image=%container.image.repository:%container.image.tag)\n  priority: NOTICE\n  tags:
+    [process, container, mitre_exfiltration]\n\n\n\n# EXPERIMENTAL RULE 12: new rule
+    chromium\n# June 10th\n- rule: Unexpected Chrome Process\n  desc: Detects unexpected
+    processes related to Chrome\n  condition: spawned_process and (proc.name in (\"chrome\",
+    \"chromium\", \"chromium-browser\")) and container\n  enabled: false\n  output:
+    \"Unexpected Chrome process detected (user=%user.name user_loginuid=%user.loginuid\n
+    \   command=%proc.cmdline container_id=%container.id container_name=%container.name
+    image=%container.image.repository:%container.image.tag proc=%proc.name pid=%proc.pid)\"\n
+    \ priority: WARNING\n  tags: [process, chrome, security, CVE-2023-3079]\n\n\n\n\n\n\n\n\n"
   falco_rules.yaml: "#\n# Copyright (C) 2022 The Falco Authors. comentario test\n#\n#\n#
     Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not
     use this file except in compliance with the License.\n# You may obtain a copy of
@@ -1315,24 +1687,23 @@ data:
     \   command=%proc.cmdline pid=%proc.pid parent=%proc.pname file=%fd.name fileraw=%fd.nameraw
     parent=%proc.pname\n    gparent=%proc.aname[2] container_id=%container.id image=%container.image.repository
     returncode=%evt.res cwd=%proc.cwd Custom_Tags=IRT_Alert)\n  priority: WARNING\n
-    \ tags: [filesystem, mitre_discovery, mitre_exfiltration, mitre_credential_access,
-    IRT_Alert]\n\n# This rule is disabled by default as many system management tools\n#
-    like ansible, etc can read these files/paths. Enable it using this macro.\n\n- macro:
-    user_known_read_ssh_information_activities\n  condition: (never_true)\n\n# Disk
-    size inspection du -hd1 and systemd process\n- macro: meli_read_ssh_information_cmdtuning\n
-    \ condition: (proc.cmdline startswith \"analyzer\" or proc.cmdline=\"du -hd1\" or
-    proc.cmdline=mbdaemon or proc.cmdline startswith \"du -\" or proc.cmdline startswith
-    \"agent_thread.r\")\n\n# Gitlab pipeline submodules and commits management\n- macro:
-    meli_read_ssh_information_proctuning\n  condition: (proc.pname=ci-submodules-r or
-    proc.pname=update-hash-com)\n\n# Baseline rules\n# Tuning: whitelist proc.cmdline
-    using meli_read_ssh_information_cmdtuning\n# Tuning: whitelist MELI images using
-    allowed_meli_images list\n- rule: Read ssh information\n  desc: Any attempt to read
-    files below ssh directories by non-ssh programs\n  condition: >\n    ((open_read
-    or open_directory) and\n     (user_ssh_directory or fd.name startswith /root/.ssh)
-    and\n     not user_known_read_ssh_information_activities and\n     not proc.name
-    in (ssh_binaries))\n     and not meli_read_ssh_information_cmdtuning\n     and not
-    meli_read_ssh_information_proctuning\n     and not container.image.repository in
-    (allowed_meli_images)\n  enabled: true\n  output: >\n    ssh-related file/directory
+    \ tags: [host, container, filesystem, mitre_credential_access, IRT_Alert]\n\n# This
+    rule is disabled by default as many system management tools\n# like ansible, etc
+    can read these files/paths. Enable it using this macro.\n\n- macro: user_known_read_ssh_information_activities\n
+    \ condition: (never_true)\n\n# Disk size inspection du -hd1 and systemd process\n-
+    macro: meli_read_ssh_information_cmdtuning\n  condition: (proc.cmdline startswith
+    \"analyzer\" or proc.cmdline=\"du -hd1\" or proc.cmdline=mbdaemon or proc.cmdline
+    startswith \"du -\" or proc.cmdline startswith \"agent_thread.r\")\n\n# Gitlab pipeline
+    submodules and commits management\n- macro: meli_read_ssh_information_proctuning\n
+    \ condition: (proc.pname=ci-submodules-r or proc.pname=update-hash-com)\n\n# Baseline
+    rules\n# Tuning: whitelist proc.cmdline using meli_read_ssh_information_cmdtuning\n#
+    Tuning: whitelist MELI images using allowed_meli_images list\n- rule: Read ssh information\n
+    \ desc: Any attempt to read files below ssh directories by non-ssh programs\n  condition:
+    >\n    ((open_read or open_directory) and\n     (user_ssh_directory or fd.name startswith
+    /root/.ssh) and\n     not user_known_read_ssh_information_activities and\n     not
+    proc.name in (ssh_binaries))\n     and not meli_read_ssh_information_cmdtuning\n
+    \    and not meli_read_ssh_information_proctuning\n     and not container.image.repository
+    in (allowed_meli_images)\n  enabled: true\n  output: >\n    ssh-related file/directory
     read by non-ssh program (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
     pid=%proc.pid file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline container_id=%container.id
     image=%container.image.repository Custom_Tags=IRT_Alert)\n  priority: ERROR\n  tags:
@@ -1585,7 +1956,7 @@ data:
     user_loginuid=%user.loginuid program=%proc.name\n    command=%proc.cmdline pid=%proc.pid
     file=%fd.name parent=%proc.pname gparent=%proc.aname[2] ggparent=%proc.aname[3]
     gggparent=%proc.aname[4] container_id=%container.id image=%container.image.repository)\n
-    \ priority: WARNING\n  tags: [filesystem, mitre_credential_access, mitre_discovery]\n\n-
+    \ priority: WARNING\n  tags: [host, container, filesystem, mitre_credential_access]\n\n-
     macro: amazon_linux_running_python_yum\n  condition: >\n    (proc.name = python
     and\n     proc.pcmdline = \"python -m amazon_linux_extras system_motd\" and\n     proc.cmdline
     startswith \"python -c import yum;\")\n\n- macro: user_known_write_rpm_database_activities\n
@@ -1874,8 +2245,8 @@ data:
     \   and not redhat_image\n    and not meli_launch_privileged_container_cmdtuning\n
     \ enabled: true\n  output: Privileged container started (user=%user.name user_loginuid=%user.loginuid
     command=%proc.cmdline pid=%proc.pid %container.info image=%container.image.repository:%container.image.tag)\n
-    \ priority: INFO\n  tags: [container, cis, mitre_privilege_escalation, mitre_lateral_movement]\n\n#
-    These capabilities were used in the past to escape from containers\n- macro: excessively_capable_container\n
+    \ priority: INFO\n  tags: [container, cis, mitre_execution]\n\n# These capabilities
+    were used in the past to escape from containers\n- macro: excessively_capable_container\n
     \ condition: >\n    (thread.cap_permitted contains CAP_SYS_ADMIN\n    or thread.cap_permitted
     contains CAP_SYS_MODULE\n    or thread.cap_permitted contains CAP_SYS_RAWIO\n    or
     thread.cap_permitted contains CAP_SYS_PTRACE\n    or thread.cap_permitted contains
@@ -2291,42 +2662,42 @@ data:
     >\n    Network tool launched in container (user=%user.name user_loginuid=%user.loginuid
     command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname\n    container_id=%container.id
     container_name=%container.name image=%container.image.repository:%container.image.tag
-    module=%proc.args Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [network,
-    process, mitre_discovery, mitre_exfiltration, IRT_Alert]\n\n# This rule is not enabled
-    by default, as there are legitimate use\n# cases for these tools on hosts. If you
-    want to enable it, modify the\n# following macro.\n- macro: consider_network_tools_on_host\n
-    \ condition: (always_true)\n\n# Baseline rules\n- rule: Launch Suspicious Network
-    Tool on Host\n  desc: Detect network tools launched on the host\n  condition: >\n
-    \   spawned_process and\n    not container and\n    consider_network_tools_on_host
-    and\n    network_tool_procs and\n    not user_known_network_tool_activities\n  enabled:
-    true\n  output: >\n    Network tool launched on host (user=%user.name user_loginuid=%user.loginuid
+    module=%proc.args Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [container,
+    network, process, mitre_execution, IRT_Alert]\n\n# This rule is not enabled by default,
+    as there are legitimate use\n# cases for these tools on hosts. If you want to enable
+    it, modify the\n# following macro.\n- macro: consider_network_tools_on_host\n  condition:
+    (always_true)\n\n# Baseline rules\n- rule: Launch Suspicious Network Tool on Host\n
+    \ desc: Detect network tools launched on the host\n  condition: >\n    spawned_process
+    and\n    not container and\n    consider_network_tools_on_host and\n    network_tool_procs
+    and\n    not user_known_network_tool_activities\n  enabled: true\n  output: >\n
+    \   Network tool launched on host (user=%user.name user_loginuid=%user.loginuid
     command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname Custom_Tags=IRT_Alert)\n
-    \ priority: NOTICE\n  tags: [network, process, mitre_discovery, mitre_exfiltration,
-    IRT_Alert]\n\n- list: grep_binaries\n  items: [grep, egrep, fgrep]\n\n- macro: grep_commands\n
-    \ condition: (proc.name in (grep_binaries))\n\n# a less restrictive search for things
-    that might be passwords/ssh/user etc.\n- macro: grep_more\n  condition: (never_true)\n\n-
-    macro: private_key_or_password\n  condition: >\n    (proc.args icontains \"BEGIN
-    PRIVATE\" or\n     proc.args icontains \"BEGIN RSA PRIVATE\" or\n     proc.args
-    icontains \"BEGIN DSA PRIVATE\" or\n     proc.args icontains \"BEGIN EC PRIVATE\"
-    or\n     (grep_more and\n      (proc.args icontains \" pass \" or\n       proc.args
-    icontains \" ssh \" or\n       proc.args icontains \" user \"))\n    )\n\n# Baseline
-    rules\n- rule: Search Private Keys or Passwords\n  desc: >\n    Detect grep private
-    keys or passwords activity.\n  condition: >\n    (spawned_process and\n     ((grep_commands
-    and private_key_or_password) or\n      (proc.name = \"find\" and (proc.args contains
-    \"id_rsa\" or proc.args contains \"id_dsa\" or \n       proc.args contains \"id_ed25519\"
-    or proc.args contains \"id_ecdsa\")))\n    )\n  enabled: true\n  output: >\n    Grep
-    private keys or passwords activities found\n    (user=%user.name user_loginuid=%user.loginuid
-    command=%proc.cmdline pid=%proc.pid container_id=%container.id container_name=%container.name\n
-    \   image=%container.image.repository:%container.image.tag Custom_Tags=IRT_Alert)\n
-    \ priority:\n    WARNING\n  tags: [process, mitre_credential_access, IRT_Alert]\n\n-
-    list: log_directories\n  items: [/var/log, /dev/log]\n\n- list: log_files\n  items:
-    [syslog, auth.log, secure, kern.log, cron, user.log, dpkg.log, last.log, yum.log,
-    access_log, mysql.log, mysqld.log]\n\n- macro: access_log_files\n  condition: (fd.directory
-    in (log_directories) or fd.filename in (log_files))\n\n# a placeholder for whitelist
-    log files that could be cleared. Recommend the macro as (fd.name startswith \"/var/log/app1*\")\n-
-    macro: allowed_clear_log_files\n  condition: (never_true)\n\n- macro: trusted_logging_images\n
-    \ condition: (container.image.repository endswith \"splunk/fluentd-hec\" or\n              container.image.repository
-    endswith \"fluent/fluentd-kubernetes-daemonset\" or\n              container.image.repository
+    \ priority: NOTICE\n  tags: [host, network, process, mitre_execution, IRT_Alert]\n\n-
+    list: grep_binaries\n  items: [grep, egrep, fgrep]\n\n- macro: grep_commands\n  condition:
+    (proc.name in (grep_binaries))\n\n# a less restrictive search for things that might
+    be passwords/ssh/user etc.\n- macro: grep_more\n  condition: (never_true)\n\n- macro:
+    private_key_or_password\n  condition: >\n    (proc.args icontains \"BEGIN PRIVATE\"
+    or\n     proc.args icontains \"BEGIN RSA PRIVATE\" or\n     proc.args icontains
+    \"BEGIN DSA PRIVATE\" or\n     proc.args icontains \"BEGIN EC PRIVATE\" or\n     (grep_more
+    and\n      (proc.args icontains \" pass \" or\n       proc.args icontains \" ssh
+    \" or\n       proc.args icontains \" user \"))\n    )\n\n# Baseline rules\n- rule:
+    Search Private Keys or Passwords\n  desc: >\n    Detect grep private keys or passwords
+    activity.\n  condition: >\n    (spawned_process and\n     ((grep_commands and private_key_or_password)
+    or\n      (proc.name = \"find\" and (proc.args contains \"id_rsa\" or proc.args
+    contains \"id_dsa\" or \n       proc.args contains \"id_ed25519\" or proc.args contains
+    \"id_ecdsa\")))\n    )\n  enabled: true\n  output: >\n    Grep private keys or passwords
+    activities found\n    (user=%user.name user_loginuid=%user.loginuid command=%proc.cmdline
+    pid=%proc.pid container_id=%container.id container_name=%container.name\n    image=%container.image.repository:%container.image.tag
+    Custom_Tags=IRT_Alert)\n  priority:\n    WARNING\n  tags: [process, mitre_credential_access,
+    IRT_Alert]\n\n- list: log_directories\n  items: [/var/log, /dev/log]\n\n- list:
+    log_files\n  items: [syslog, auth.log, secure, kern.log, cron, user.log, dpkg.log,
+    last.log, yum.log, access_log, mysql.log, mysqld.log]\n\n- macro: access_log_files\n
+    \ condition: (fd.directory in (log_directories) or fd.filename in (log_files))\n\n#
+    a placeholder for whitelist log files that could be cleared. Recommend the macro
+    as (fd.name startswith \"/var/log/app1*\")\n- macro: allowed_clear_log_files\n  condition:
+    (never_true)\n\n- macro: trusted_logging_images\n  condition: (container.image.repository
+    endswith \"splunk/fluentd-hec\" or\n              container.image.repository endswith
+    \"fluent/fluentd-kubernetes-daemonset\" or\n              container.image.repository
     endswith \"openshift3/ose-logging-fluentd\" or\n              container.image.repository
     endswith \"containernetworking/azure-npm\")\n\n\n- macro: meli_clear_log_activities_cmdtuning\n
     \ condition: (proc.cmdline=containerd or proc.cmdline startswith \"dockerd\" or
@@ -2436,7 +2807,7 @@ data:
     \ output: >\n    Remote file copy tool launched in container (user=%user.name user_loginuid=%user.loginuid
     command=%proc.cmdline pid=%proc.pid parent_process=%proc.pname\n    container_id=%container.id
     container_name=%container.name image=%container.image.repository:%container.image.tag
-    Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [network, process, mitre_lateral_movement,
+    Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [container, network, process,
     mitre_exfiltration, IRT_Alert]\n\n- rule: Create Symlink Over Sensitive Files\n
     \ desc: Detect symlink created over sensitive files\n  condition: >\n    create_symlink
     and\n    (evt.arg.target in (sensitive_file_names) or evt.arg.target in (sensitive_directory_names))\n
@@ -2754,11 +3125,11 @@ data:
     an attempt to exploit a container escape using release_agent file (user=%user.name
     user_loginuid=%user.loginuid filename=%fd.name %container.info image=%container.image.repository:%container.image.tag
     cap_effective=%thread.cap_effective Custom_Tags=IRT_Alert)\"\n  priority: CRITICAL\n
-    \ tags: [container, mitre_privilege_escalation, mitre_lateral_movement, IRT_Alert]\n\n#
-    Rule for detecting potential Log4Shell (CVE-2021-44228) exploitation\n# Note: Not
-    compatible with Java 17+, which uses read() syscalls\n- macro: java_network_read\n
-    \ condition: (evt.type=recvfrom and fd.type in (ipv4, ipv6) and proc.name=java)\n\n\n#
-    DataDog, New Relic\n- macro: meli_java_process_class_file_download_cmdtuning\n  condition:
+    \ tags: [container, process, mitre_privilege_escalation, IRT_Alert]\n\n# Rule for
+    detecting potential Log4Shell (CVE-2021-44228) exploitation\n# Note: Not compatible
+    with Java 17+, which uses read() syscalls\n- macro: java_network_read\n  condition:
+    (evt.type=recvfrom and fd.type in (ipv4, ipv6) and proc.name=java)\n\n\n# DataDog,
+    New Relic\n- macro: meli_java_process_class_file_download_cmdtuning\n  condition:
     (proc.cmdline startswith \"java -Xmx100m -Xms50m\" or proc.cmdline startswith \"java
     -Djava.util.logging.config.file=/app/tomcat/conf/logging.properties\" or\n   proc.cmdline
     startswith \"java -javaagent:newrelic/newrelic.jar\" or proc.cmdline contains \"datadog-agent\"
@@ -2829,8 +3200,7 @@ data:
     user_loginuid=%user.loginuid program=%proc.name\n    command=%proc.cmdline pid=%proc.pid
     file=%fd.name parent=%proc.pname gparent=%proc.aname[2] ggparent=%proc.aname[3]
     gggparent=%proc.aname[4] container_id=%container.id image=%container.image.repository)\n
-    \ priority: WARNING\n  tags: [filesystem, mitre_credential_access, mitre_discovery,
-    testborrar]\n"
+    \ priority: WARNING\n  tags: [container, filesystem, process, mitre_discovery]\n"
   k8s_audit_rules.yaml: |
     #
     # Copyright (C) 2022 The Falco Authors.
