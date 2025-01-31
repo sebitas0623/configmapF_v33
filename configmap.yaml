@@ -3134,7 +3134,8 @@ data:
     command=%proc.cmdline pid=%proc.pid filename=%evt.arg.filename name=%evt.arg.name
     mode=%evt.arg.mode event=%evt.type Custom_Tags=IRT_Alert)\n  priority: ERROR\n  tags:
     [container, process, filesystem, mitre_execution, IRT_Alert]\n\n## fix-git-hook-pii-data\n-
-    list: c2_server_ip_list\n  items: []\n\n# Baseline rules\n- rule: Outbound Connection
+    list: c2_server_ip_list\n  items: ['\"5.199.170.64\"', '\"185.150.117.221\"', '\"188.214.130.21\"',
+    '\"93.115.29.187\"', '\"92.242.62.20\"']\n\n# Baseline rules\n- rule: Outbound Connection
     to C2 Servers\n  desc: Detect outbound connection to command & control servers\n
     \ condition: outbound and fd.sip in (c2_server_ip_list)\n  enabled: true\n  output:
     Outbound connection to C2 server (command=%proc.cmdline pid=%proc.pid connection=%fd.name
