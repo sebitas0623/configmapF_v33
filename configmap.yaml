@@ -1,5 +1,5 @@
 ---
-# Source: falco-obsec/templates/configmap.yaml
+# Source: falco-obsec/templates/configmap.yaml cambio borrar
 apiVersion: v1
 kind: ConfigMap
 metadata:
